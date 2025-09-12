@@ -1,0 +1,5 @@
+[tool.black]
+line-length = 88   # keep same as flake8
+
+[tool.isort]
+profile = "black"  # match blacks formatting style

@@ -1,7 +1,12 @@
+#.venv folder
+.venv/
+
 # Byte-compiled / optimized / DLL files
+*.pyc
 __pycache__/
 *.py[codz]
 *$py.class
+
 
 # C extensions
 *.so
