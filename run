@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+import os, sys
+
+# make 'src' importable when running this script directly
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "src"))
+
+from swe_project.cli import main
+
+if __name__ == "__main__":
+    sys.exit(main())
