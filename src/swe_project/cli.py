@@ -20,8 +20,8 @@ import sys
 import time
 from typing import List, Tuple
 
-
 # ---------- helpers ----------
+
 
 def _run(cmd: List[str]) -> Tuple[int, str, str]:
     """Run a subprocess and capture output."""
@@ -50,13 +50,13 @@ def _pytest_counts(text: str) -> Tuple[int, int]:
             s += int(mm.group(1))
         return s
 
-    passed  = sum_matches("passed")
-    failed  = sum_matches("failed")
-    errors  = sum_matches("error|errors")
+    passed = sum_matches("passed")
+    failed = sum_matches("failed")
+    errors = sum_matches("error|errors")
     skipped = sum_matches("skipped")
     xfailed = sum_matches("xfailed")
     xpassed = sum_matches("xpassed")
-    warns   = sum_matches("warning|warnings")
+    warns = sum_matches("warning|warnings")
 
     total = passed + failed + errors + skipped + xfailed + xpassed + warns
     if total == 0 and total_hint:
@@ -77,10 +77,13 @@ def _coverage_percent(text: str) -> int:
 
 # ---------- commands ----------
 
+
 def cmd_install() -> int:
     """Install dependencies used by the grader and local runs."""
     print("Installing dependencies from requirements.txt ...")
-    code, out, err = _run([sys.executable, "-m", "pip", "install", "--user", "-r", "requirements.txt"])
+    code, out, err = _run(
+        [sys.executable, "-m", "pip", "install", "--user", "-r", "requirements.txt"]
+    )
     if code == 0:
         print("Dependencies installed.")
         return 0
@@ -109,10 +112,7 @@ def cmd_score(url_file: str) -> int:
     for u in urls:
         if hf_any.match(u):
             # Minimal NDJSON object that Aya's test asserts on
-            print(json.dumps({
-                "name": u,
-                "net_score": 0.0
-            }))
+            print(json.dumps({"name": u, "net_score": 0.0}))
     return 0
 
 
@@ -141,6 +141,7 @@ def cmd_test() -> int:
 
 
 # ---------- entrypoint ----------
+
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="run", description="SWE-Project CLI")
