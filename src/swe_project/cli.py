@@ -1,9 +1,9 @@
-#!/usr/bin/env python3
 """
 swe_project.cli
 
 Implements the CLI for Phase 1 with three commands:
-  install  -> pip install --user -r requirements.txt
+  install  -> pip install -r requirements.txt
+              (adds --user if not in a venv)
   score    -> read URLs file and print NDJSON (stub metrics)
   test     -> run pytest under coverage and print:
               "X/Y test cases passed. Z% line coverage achieved."
@@ -22,7 +22,6 @@ from typing import List, Tuple
 
 # ---------- helpers ----------
 
-
 def _run(cmd: List[str]) -> Tuple[int, str, str]:
     """Run a subprocess and capture output."""
     p = subprocess.run(cmd, text=True, capture_output=True)
@@ -36,7 +35,7 @@ def _read_urls(path: str) -> List[str]:
 
 
 def _pytest_counts(text: str) -> Tuple[int, int]:
-    """Parse pytest summary into (passed, total)."""
+    """Parse pytest summary to (passed, total)."""
     passed = 0
     total = 0
 
@@ -50,13 +49,13 @@ def _pytest_counts(text: str) -> Tuple[int, int]:
             s += int(mm.group(1))
         return s
 
-    passed = sum_matches("passed")
-    failed = sum_matches("failed")
-    errors = sum_matches("error|errors")
+    passed  = sum_matches("passed")
+    failed  = sum_matches("failed")
+    errors  = sum_matches("error|errors")
     skipped = sum_matches("skipped")
     xfailed = sum_matches("xfailed")
     xpassed = sum_matches("xpassed")
-    warns = sum_matches("warning|warnings")
+    warns   = sum_matches("warning|warnings")
 
     total = passed + failed + errors + skipped + xfailed + xpassed + warns
     if total == 0 and total_hint:
@@ -75,15 +74,19 @@ def _coverage_percent(text: str) -> int:
     return int(m2.group(1)) if m2 else 0
 
 
+def _in_venv() -> bool:
+    """Detect if Python is running inside a virtual environment."""
+    return getattr(sys, "base_prefix", sys.prefix) != sys.prefix
+
+
 # ---------- commands ----------
 
-
 def cmd_install() -> int:
-    """Install dependencies used by the grader and local runs."""
     print("Installing dependencies from requirements.txt ...")
-    code, out, err = _run(
-        [sys.executable, "-m", "pip", "install", "--user", "-r", "requirements.txt"]
-    )
+    args = [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"]
+    if not _in_venv():
+        args.insert(4, "--user")  # only use --user outside venv
+    code, out, err = _run(args)
     if code == 0:
         print("Dependencies installed.")
         return 0
@@ -94,8 +97,7 @@ def cmd_install() -> int:
 def cmd_score(url_file: str) -> int:
     """
     Emit one NDJSON line per URL (minimal keys to satisfy tests).
-    Aya's test expects keys: "name" and "net_score".
-    We accept any huggingface.co URL for Milestone-2 stubs.
+    Accept any huggingface.co URL for Milestone-2 stubs.
     """
     try:
         urls = _read_urls(url_file)
@@ -103,15 +105,12 @@ def cmd_score(url_file: str) -> int:
         print(json.dumps({"event": "error", "error": str(e), "url_file": url_file}))
         return 1
 
-    # Accept any Hugging Face URL with at least something after the domain.
     hf_any = re.compile(r"https?://(www\.)?huggingface\.co/\S+", re.I)
-
-    # (Optional) simple timer to simulate latency if you want to extend later
-    _ = time.perf_counter()
+    _ = time.perf_counter()  # placeholder for future timing
 
     for u in urls:
         if hf_any.match(u):
-            # Minimal NDJSON object that Aya's test asserts on
+            # Minimal NDJSON object Aya's tests expect
             print(json.dumps({"name": u, "net_score": 0.0}))
     return 0
 
@@ -121,12 +120,11 @@ def cmd_test() -> int:
     Run pytest under coverage and print exactly:
       'X/Y test cases passed. Z% line coverage achieved.'
     """
-    # try with coverage first
     cov_ok = True
-    code, out, err = _run([sys.executable, "-m", "coverage", "run", "-m", "pytest"])
+    code, out, err = _run([sys.executable, "-m", "coverage", "run", "-m", "pytest", "tests"])
     if code != 0 and "No module named coverage" in (out + err):
         cov_ok = False
-        code, out, err = _run([sys.executable, "-m", "pytest"])
+        code, out, err = _run([sys.executable, "-m", "pytest", "tests"])
 
     combined = (out or "") + "\n" + (err or "")
     passed, total = _pytest_counts(combined)
@@ -141,7 +139,6 @@ def cmd_test() -> int:
 
 
 # ---------- entrypoint ----------
-
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="run", description="SWE-Project CLI")
@@ -168,5 +165,5 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    # Needed because Aya calls: python -m swe_project.cli …
+    # Allows: python -m swe_project.cli ...
     raise SystemExit(main())
