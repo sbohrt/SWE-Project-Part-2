@@ -21,6 +21,7 @@ import sys
 import time
 from typing import List, Tuple
 
+
 from swe_project.logger import setup_logging
 
 # ---------- helpers ----------
@@ -87,7 +88,11 @@ def _in_venv() -> bool:
 
 
 def cmd_install() -> int:
+
     logging.info("Installing dependencies from requirements.txt ...")
+
+    print("Installing dependencies from requirements.txt ...")
+
     args = [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"]
     if not _in_venv():
         args.insert(4, "--user")  # only use --user outside venv
@@ -112,14 +117,18 @@ def cmd_score(url_file: str) -> int:
         print(json.dumps({"event": "error", "error": str(e), "url_file": url_file}))
         return 1
 
+
     logging.info("Scoring %d URLs from %s ...", len(urls), url_file)
+
 
     hf_any = re.compile(r"https?://(www\.)?huggingface\.co/\S+", re.I)
     _ = time.perf_counter()  # placeholder for future timing
 
     for u in urls:
         if hf_any.match(u):
+
             logging.debug("Accepted URL: %s", u)
+
             # Minimal NDJSON object Aya's tests expect
             print(json.dumps({"name": u, "net_score": 0.0}))
     return 0
@@ -130,12 +139,14 @@ def cmd_test() -> int:
     Run pytest under coverage and print exactly:
       'X/Y test cases passed. Z% line coverage achieved.'
     """
+
     logging.info("Running tests with coverage...")
 
     cov_ok = True
     code, out, err = _run(
         [sys.executable, "-m", "coverage", "run", "-m", "pytest", "tests"]
     )
+
     if code != 0 and "No module named coverage" in (out + err):
         cov_ok = False
         code, out, err = _run([sys.executable, "-m", "pytest", "tests"])
