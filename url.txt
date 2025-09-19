@@ -1,0 +1,7 @@
+# model → should produce 1 NDJSON line
+https://huggingface.co/google/bert-base-uncased
+# dataset → ignored
+https://huggingface.co/datasets/xlangai/AgentNet
+# code → ignored
+https://github.com/SkyworkAI/Matrix-Game
+

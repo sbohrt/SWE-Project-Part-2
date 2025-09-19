@@ -23,9 +23,26 @@ from typing import List, Tuple
 
 
 from swe_project.logger import setup_logging
+# ---------------- URL categorization regexes ----------------
+
+# MODEL: any huggingface.co/{org}/{repo}[optional /tree/...], but NOT datasets/*
+HF_MODEL = re.compile(
+    r"https?://(?:www\.)?huggingface\.co/(?!datasets/)[^/\s]+/[^/\s]+(?:/tree/[^ \t\n\r\f\v]*)?$",
+    re.IGNORECASE,
+)
+# DATASET (ignored for output)
+HF_DATASET = re.compile(
+    r"https?://(?:www\.)?huggingface\.co/datasets/[^ \t\n\r\f\v]+",
+    re.IGNORECASE,
+)
+# Code on GitHub (ignored for output; optional)
+GITHUB_CODE = re.compile(
+    r"https?://(?:www\.)?github\.com/[^/\s]+/[^/\s]+(?:/[^ \t\n\r\f\v]*)?$",
+    re.IGNORECASE,
+)
+
 
 # ---------- helpers ----------
-
 
 def _run(cmd: List[str]) -> Tuple[int, str, str]:
     """Run a subprocess and capture output."""
@@ -107,8 +124,9 @@ def cmd_install() -> int:
 
 def cmd_score(url_file: str) -> int:
     """
-    Emit one NDJSON line per URL (minimal keys to satisfy tests).
-    Accept any huggingface.co URL for Milestone-2 stubs.
+    Read newline-delimited URLs from `url_file` and emit ONE NDJSON line
+    per MODEL URL only, using the full Table-1 schema with placeholder values.
+    Datasets and code URLs are ignored for output.
     """
     try:
         urls = _read_urls(url_file)
@@ -117,20 +135,53 @@ def cmd_score(url_file: str) -> int:
         print(json.dumps({"event": "error", "error": str(e), "url_file": url_file}))
         return 1
 
-
     logging.info("Scoring %d URLs from %s ...", len(urls), url_file)
 
-
-    hf_any = re.compile(r"https?://(www\.)?huggingface\.co/\S+", re.I)
-    _ = time.perf_counter()  # placeholder for future timing
-
     for u in urls:
-        if hf_any.match(u):
+        # Only emit output for MODEL URLs
+        if HF_MODEL.match(u):
+            # (Placeholders for now)
+            payload = {
+                "name": u,
+                "category": "MODEL",
 
-            logging.debug("Accepted URL: %s", u)
+                "net_score": 0.0,
+                "net_score_latency": 0,
 
-            # Minimal NDJSON object Aya's tests expect
-            print(json.dumps({"name": u, "net_score": 0.0}))
+                "ramp_up_time": 0.0,
+                "ramp_up_time_latency": 0,
+
+                "bus_factor": 0.0,
+                "bus_factor_latency": 0,
+
+                "performance_claims": 0.0,
+                "performance_claims_latency": 0,
+
+                "license": 0.0,
+                "license_latency": 0,
+
+                "size_score": {
+                    "raspberry_pi": 0.0,
+                    "jetson_nano": 0.0,
+                    "desktop_pc": 0.0,
+                    "aws_server": 0.0,
+                },
+                "size_score_latency": 0,
+
+                "dataset_and_code_score": 0.0,
+                "dataset_and_code_score_latency": 0,
+
+                "dataset_quality": 0.0,
+                "dataset_quality_latency": 0,
+
+                "code_quality": 0.0,
+                "code_quality_latency": 0,
+            }
+            print(json.dumps(payload))
+        else:
+            # Non-model URLs are intentionally ignored in output per spec.
+            logging.debug("Ignoring non-model URL: %s", u)
+
     return 0
 
 
