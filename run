@@ -1,12 +1,31 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
+
 import sys, os
 from pathlib import Path
 
-# Make 'src' importable BEFORE importing your package
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent # the folder where this "run" file lives (repo root).
+
+# Add "<repo>/src" to the Python import search path.
+# Without this, "import swe_project" would fail because Python doesn't look in src/ by default.
 sys.path.insert(0, str(ROOT / "src"))
 
-from swe_project.cli import main  # now this works
+# to import CLI entrypoint (cli.py defines main()).
+from swe_project.cli import main 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    argv = sys.argv[1:] # Grab the arguments that come after "./run"
+
+    # The spec requires: "./run URL_FILE" (no 'score' keyword).
+    # So if there's exactly one argument and it's not an option (not starting with "-"),
+    # we check if it's a file path and rewrite the arguments as if the user typed "score URL_FILE".
+    if len(argv) == 1 and not argv[0].startswith("-"):
+        p = Path(argv[0])
+        # Accept both absolute (spec-required) and relative paths (convenience).
+        # We don't validate the file contents here — cli.py handles errors later.
+        if p.is_file() or p.suffix in {".txt", ""}:
+            argv = ["score", argv[0]]
+
+    # Call into the CLI's main() with the possibly modified argv.
+    # SystemExit ensures we propagate the return code (0 = success, 1 = error).
+    raise SystemExit(main(argv))
+
