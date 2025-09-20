@@ -1,2 +1,4 @@
-pytest
-coverage
+huggingface_hub>=0.24.0
+pytest>=8.0.0
+coverage>=7.0
+typing_extensions>=4.10
