@@ -1,7 +1,9 @@
 # src/swe_project/core/model_url.py
 from __future__ import annotations
-from typing import Tuple, Optional
+
+from typing import Optional, Tuple
 from urllib.parse import urlparse
+
 
 def to_repo_id(hf_url: str) -> Tuple[str, Optional[str]]:
     """

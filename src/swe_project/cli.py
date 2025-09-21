@@ -21,13 +21,26 @@ import sys
 import time
 from typing import List, Tuple
 
-
+from swe_project.core.exec_pool import run_parallel
+from swe_project.core.scoring import combine
 from swe_project.logger import setup_logging
+
+# from swe_project.metrics import bus_factor  # noqa: F401
+from swe_project.metrics import performance_claims  # noqa: F401
+
+# from swe_project.metrics import ramp_up_time  # noqa: F401
+# from swe_project.metrics import (  # add license, dataset_and_code, dataset_quality,
+# code_quality when ready; noqa: F401
+#    size_score,
+# )
+from swe_project.metrics.base import registered
+
 # ---------------- URL categorization regexes ----------------
 
 # MODEL: any huggingface.co/{org}/{repo}[optional /tree/...], but NOT datasets/*
 HF_MODEL = re.compile(
-    r"https?://(?:www\.)?huggingface\.co/(?!datasets/)[^/\s]+/[^/\s]+(?:/tree/[^ \t\n\r\f\v]*)?$",
+    r"https?://(?:www\.)?huggingface\.co/(?!datasets/)[^/\s]+/[^/\s]+"
+    r"(?:/tree/[^ \t\n\r\f\v]*)?$",
     re.IGNORECASE,
 )
 # DATASET (ignored for output)
@@ -43,6 +56,7 @@ GITHUB_CODE = re.compile(
 
 
 # ---------- helpers ----------
+
 
 def _run(cmd: List[str]) -> Tuple[int, str, str]:
     """Run a subprocess and capture output."""
@@ -105,7 +119,6 @@ def _in_venv() -> bool:
 
 
 def cmd_install() -> int:
-
     logging.info("Installing dependencies from requirements.txt ...")
 
     print("Installing dependencies from requirements.txt ...")
@@ -138,49 +151,77 @@ def cmd_score(url_file: str) -> int:
     logging.info("Scoring %d URLs from %s ...", len(urls), url_file)
 
     for u in urls:
-        # Only emit output for MODEL URLs
-        if HF_MODEL.match(u):
-            # (Placeholders for now)
-            payload = {
-                "name": u,
-                "category": "MODEL",
-
-                "net_score": 0.0,
-                "net_score_latency": 0,
-
-                "ramp_up_time": 0.0,
-                "ramp_up_time_latency": 0,
-
-                "bus_factor": 0.0,
-                "bus_factor_latency": 0,
-
-                "performance_claims": 0.0,
-                "performance_claims_latency": 0,
-
-                "license": 0.0,
-                "license_latency": 0,
-
-                "size_score": {
-                    "raspberry_pi": 0.0,
-                    "jetson_nano": 0.0,
-                    "desktop_pc": 0.0,
-                    "aws_server": 0.0,
-                },
-                "size_score_latency": 0,
-
-                "dataset_and_code_score": 0.0,
-                "dataset_and_code_score_latency": 0,
-
-                "dataset_quality": 0.0,
-                "dataset_quality_latency": 0,
-
-                "code_quality": 0.0,
-                "code_quality_latency": 0,
-            }
-            print(json.dumps(payload))
-        else:
-            # Non-model URLs are intentionally ignored in output per spec.
+        if not HF_MODEL.match(u):
             logging.debug("Ignoring non-model URL: %s", u)
+            logging.debug("registered metrics: %s", [f for _, f, _ in registered()])
+            continue
+
+        def _make_metric_task(metric_func, model_url: str):
+            def task():
+                return metric_func(model_url)  # zero-arg callable for the pool
+
+            return task
+
+        # --- build tasks from registry (each compute(model_url) -> {"value", "latency_ms"}) ---
+        tasks = []
+        for _, field, compute in registered():
+            # capture current compute and URL to avoid the late-binding lambda bug
+            tasks.append((field, _make_metric_task(compute, u)))
+
+        # run metrics in parallel
+        t0 = time.perf_counter()
+        results = run_parallel(tasks, timeout_s=90)
+        net_latency_ms = int((time.perf_counter() - t0) * 1000)
+
+        # helpers for safe extraction
+        def _val(name: str) -> float:
+            return float(results.get(name, {}).get("value", 0.0))
+
+        def _lat(name: str) -> int:
+            return int(results.get(name, {}).get("latency_ms", 0))
+
+        # size_score is a dict; ensure all four device keys
+        size_map = results.get("size_score", {}).get("value", {}) or {}
+        for k in ("raspberry_pi", "jetson_nano", "desktop_pc", "aws_server"):
+            size_map.setdefault(k, 0.0)
+        size_lat = _lat("size_score")
+
+        # gather scalar metrics for net score; use mean of size_map for its scalar
+        scalars = {
+            "ramp_up_time": _val("ramp_up_time"),
+            "bus_factor": _val("bus_factor"),
+            "license": _val("license"),
+            "dataset_and_code_score": _val("dataset_and_code_score"),
+            "dataset_quality": _val("dataset_quality"),
+            "code_quality": _val("code_quality"),
+            "performance_claims": _val("performance_claims"),
+            "size_score": (sum(size_map.values()) / 4.0),
+        }
+        net = float(combine(scalars))
+
+        payload = {
+            "name": u,
+            "category": "MODEL",
+            "net_score": round(net, 3),
+            "net_score_latency": net_latency_ms,
+            "ramp_up_time": scalars["ramp_up_time"],
+            "ramp_up_time_latency": _lat("ramp_up_time"),
+            "bus_factor": scalars["bus_factor"],
+            "bus_factor_latency": _lat("bus_factor"),
+            "performance_claims": scalars["performance_claims"],
+            "performance_claims_latency": _lat("performance_claims"),
+            "license": scalars["license"],
+            "license_latency": _lat("license"),
+            "size_score": size_map,
+            "size_score_latency": size_lat,
+            "dataset_and_code_score": scalars["dataset_and_code_score"],
+            "dataset_and_code_score_latency": _lat("dataset_and_code_score"),
+            "dataset_quality": scalars["dataset_quality"],
+            "dataset_quality_latency": _lat("dataset_quality"),
+            "code_quality": scalars["code_quality"],
+            "code_quality_latency": _lat("code_quality"),
+        }
+        print(json.dumps(payload))
 
     return 0
 
