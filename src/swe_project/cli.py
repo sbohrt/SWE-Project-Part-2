@@ -27,6 +27,7 @@ from swe_project.logger import setup_logging
 
 # from swe_project.metrics import bus_factor  # noqa: F401
 from swe_project.metrics import performance_claims  # noqa: F401
+from swe_project.metrics import ramp_up_time  # noqa: F401
 
 # from swe_project.metrics import ramp_up_time  # noqa: F401
 # from swe_project.metrics import (  # add license, dataset_and_code, dataset_quality,
