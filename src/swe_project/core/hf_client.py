@@ -11,6 +11,10 @@ def model_info(repo_id: str) -> Any:
     return _api.model_info(repo_id)
 
 
+def dataset_info(repo_id: str) -> Any:
+    return _api.dataset_info(repo_id)
+
+
 def download_snapshot(repo_id: str, allow_patterns: List[str]) -> str:
     return str(
         snapshot_download(
