@@ -32,15 +32,22 @@ from swe_project.core.scoring import combine
 from swe_project.core.url_ctx import clear as clear_url_ctx
 from swe_project.core.url_ctx import set_context
 from swe_project.logger import setup_logging
-
-# Force load metric modules so they register with the central registry.
-from swe_project.metrics import code_quality  # noqa: F401
-from swe_project.metrics import dataset_and_code  # noqa: F401
-from swe_project.metrics import dataset_quality  # noqa: F401
-from swe_project.metrics import license  # noqa: F401
-from swe_project.metrics import performance_claims  # noqa: F401
-from swe_project.metrics import ramp_up_time  # noqa: F401
 from swe_project.metrics.base import registered
+
+
+def _load_metrics() -> None:
+    """
+    Import metric modules for their registration side-effects.
+    Called only by `cmd_score` so `install`/`test` don't require optional deps yet.
+    """
+    # Import inside function to avoid ImportError before `install` runs.
+    from swe_project.metrics import code_quality  # noqa: F401
+    from swe_project.metrics import dataset_and_code  # noqa: F401
+    from swe_project.metrics import dataset_quality  # noqa: F401
+    from swe_project.metrics import license  # noqa: F401
+    from swe_project.metrics import performance_claims  # noqa: F401
+    from swe_project.metrics import ramp_up_time  # noqa: F401
+
 
 # ---------------- URL patterns ----------------
 
@@ -144,7 +151,6 @@ def _iter_models_from_csv(path: str):
 
 def cmd_install() -> int:
     logging.info("Installing dependencies from requirements.txt ...")
-    print("Installing dependencies from requirements.txt ...")
 
     args = [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"]
     if not _in_venv():
@@ -163,6 +169,7 @@ def cmd_score(url_file: str) -> int:
     Read CSV triplets from `url_file` and emit ONE NDJSON line per MODEL.
     The metrics can read code/dataset URLs from the shared context.
     """
+    _load_metrics()
     try:
         Path(url_file).resolve(strict=True)
     except OSError as e:
