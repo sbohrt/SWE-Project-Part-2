@@ -1,36 +1,25 @@
-#!/usr/bin/env bash
+#!/usr/bin/env python3
+from __future__ import annotations
+
+import os
 import sys
 from pathlib import Path
 
-from swe_project.cli import main
+# Add "<repo>/src" to the Python import path so "python -m swe_project.cli" works
+ROOT = Path(__file__).resolve().parent
+src_path = str(ROOT / "src")
+os.environ["PYTHONPATH"] = f"{src_path}{os.pathsep}{os.environ.get('PYTHONPATH','')}"
 
-ROOT = (
-    Path(__file__).resolve().parent
-)  # the folder where this "run" file lives (repo root).
+# Convenience: allow "./run URL_FILE" -> "./run score URL_FILE"
+argv = sys.argv[1:]
+if (
+    len(argv) == 1
+    and not argv[0].startswith("-")
+    and argv[0] not in {"install", "test", "score"}
+):
+    p = Path(argv[0])
+    if p.is_file() or p.suffix in {".txt", ""}:
+        argv = ["score", argv[0]]
 
-# Add "<repo>/src" to the Python import search path.
-# Without this, "import swe=_project" would fail because Python doesn't look in src/ by default.
-sys.path.insert(0, str(ROOT / "src"))
-
-
-if __name__ == "__main__":
-    # Grab the arguments that come after "./run"
-    argv = sys.argv[1:]
-
-    # If exactly one arg is given AND it's not a known subcommand or an option,
-    # treat it as the URL file (spec wants "./run URL_FILE").
-    if (
-        len(argv) == 1
-        and not argv[0].startswith("-")  # don't rewrite options like --help
-        and argv[0]
-        not in {"install", "test", "score"}  # don't rewrite known subcommands
-    ):
-        p = Path(argv[0])
-        # Accept both absolute (spec-required) and relative (convenience) paths.
-        # We don’t validate contents here — cli.py handles file errors later.
-        if p.is_file() or p.suffix in {".txt", ""}:
-            argv = ["score", argv[0]]
-
-    # Call into the CLI's main() with the possibly modified argv.
-    # SystemExit ensures we propagate the return code (0 = success, 1 = error).
-    raise SystemExit(main(argv))
+# Replace current process with "python -m swe_project.cli ..."
+os.execv(sys.executable, [sys.executable, "-m", "swe_project.cli", *argv])
