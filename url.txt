@@ -1,8 +1,4 @@
-# model → should produce 1 NDJSON line
-https://huggingface.co/google/bert-base-uncased
-# dataset → ignored
-https://huggingface.co/datasets/xlangai/AgentNet
-# code → ignored
-https://github.com/SkyworkAI/Matrix-Game
-https://huggingface.co/google-bert/bert-base-uncased
+https://github.com/google-research/bert, https://huggingface.co/datasets/bookcorpus/bookcorpus, https://huggingface.co/google-bert/bert-base-uncased
+,,https://huggingface.co/parvk11/audience_classifier_model
+,,https://huggingface.co/openai/whisper-tiny/tree/main
 

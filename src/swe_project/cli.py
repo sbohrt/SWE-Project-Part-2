@@ -1,58 +1,45 @@
 """
 swe_project.cli
 
-Implements the CLI for Phase 1 with three commands:
-  install  -> pip install -r requirements.txt
-              (adds --user if not in a venv)
-  score    -> read URLs file and print NDJSON (stub metrics)
-  test     -> run pytest under coverage and print:
+Phase 1 CLI with three commands:
+  install  -> pip install -r requirements.txt (adds --user if not in a venv)
+  score    -> read a CSV file where each row is: code_url, dataset_url, model_url
+              - code_url and dataset_url may be blank
+              - exactly ONE NDJSON line is emitted per valid model_url row
+              - code/dataset are stored in a URL context for metrics to use
+  test     -> run pytest (under coverage if available) and print:
               "X/Y test cases passed. Z% line coverage achieved."
-Pure stdlib only.
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import json
 import logging
 import re
 import subprocess
 import sys
 import time
+from pathlib import Path
 from typing import List, Tuple
 
+# Ensure metric modules auto-register via package import side-effects.
+from swe_project import metrics  # noqa: F401
 from swe_project.core.exec_pool import run_parallel
+from swe_project.core.model_url import to_repo_id
 from swe_project.core.scoring import combine
+from swe_project.core.url_ctx import clear as clear_url_ctx
+from swe_project.core.url_ctx import set_context
 from swe_project.logger import setup_logging
-
-# from swe_project.metrics import bus_factor  # noqa: F401
-from swe_project.metrics import license  # noqa: F401
-from swe_project.metrics import performance_claims  # noqa: F401
-from swe_project.metrics import ramp_up_time  # noqa: F401
-
-# from swe_project.metrics import ramp_up_time  # noqa: F401
-# from swe_project.metrics import (  # add license, dataset_and_code, dataset_quality,
-# code_quality when ready; noqa: F401
-#    size_score,
-# )
 from swe_project.metrics.base import registered
 
-# ---------------- URL categorization regexes ----------------
+# ---------------- URL patterns ----------------
 
-# MODEL: any huggingface.co/{org}/{repo}[optional /tree/...], but NOT datasets/*
+# Valid HF model URL: huggingface.co/{org}/{repo} with optional /tree|resolve/<branch>/...
 HF_MODEL = re.compile(
     r"https?://(?:www\.)?huggingface\.co/(?!datasets/)[^/\s]+/[^/\s]+"
-    r"(?:/tree/[^ \t\n\r\f\v]*)?$",
-    re.IGNORECASE,
-)
-# DATASET (ignored for output)
-HF_DATASET = re.compile(
-    r"https?://(?:www\.)?huggingface\.co/datasets/[^ \t\n\r\f\v]+",
-    re.IGNORECASE,
-)
-# Code on GitHub (ignored for output; optional)
-GITHUB_CODE = re.compile(
-    r"https?://(?:www\.)?github\.com/[^/\s]+/[^/\s]+(?:/[^ \t\n\r\f\v]*)?$",
+    r"(?:/(?:tree|resolve)/[^/\s]+(?:/[^ \t\n\r\f\v]*)?)?$",
     re.IGNORECASE,
 )
 
@@ -66,18 +53,8 @@ def _run(cmd: List[str]) -> Tuple[int, str, str]:
     return p.returncode, p.stdout, p.stderr
 
 
-def _read_urls(path: str) -> List[str]:
-    with open(path, "r", encoding="utf-8") as f:
-        lines = [ln.strip() for ln in f]
-    return [ln for ln in lines if ln and not ln.startswith("#")]
-
-
 def _pytest_counts(text: str) -> Tuple[int, int]:
-    """Parse pytest summary to (passed, total)."""
-    passed = 0
-    total = 0
-
-    # collected N items
+    """Parse pytest summary to (passed, total). Prefer 'collected N items'."""
     m = re.search(r"collected\s+(\d+)\s+items?", text)
     total_hint = int(m.group(1)) if m else 0
 
@@ -93,10 +70,9 @@ def _pytest_counts(text: str) -> Tuple[int, int]:
     skipped = sum_matches("skipped")
     xfailed = sum_matches("xfailed")
     xpassed = sum_matches("xpassed")
-    warns = sum_matches("warning|warnings")
 
-    total = passed + failed + errors + skipped + xfailed + xpassed + warns
-    if total == 0 and total_hint:
+    total = passed + failed + errors + skipped + xfailed + xpassed
+    if total_hint:
         total = total_hint
     return passed, total
 
@@ -117,12 +93,49 @@ def _in_venv() -> bool:
     return getattr(sys, "base_prefix", sys.prefix) != sys.prefix
 
 
+def _iter_models_from_csv(path: str):
+    """
+    Read CSV rows of the form: code_url, dataset_url, model_url
+    - code_url or dataset_url may be blank
+    - model_url must be a valid HF model URL to be yielded
+    For each valid row:
+      - store (code,dataset) context for that model
+      - yield the model URL
+    """
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if not row:
+                continue
+            # allow comment lines if first cell starts with '#'
+            if row[0].strip().startswith("#"):
+                continue
+
+            # normalize to length >= 3
+            cells = [c.strip() for c in row]
+            # pad short rows (defensive)
+            while len(cells) < 3:
+                cells.insert(0, "")
+
+            code_url, dataset_url, model_url = cells[-3], cells[-2], cells[-1]
+
+            if not model_url:
+                # malformed: no model URL provided
+                continue
+
+            if not HF_MODEL.match(model_url):
+                # ignore non-model rows
+                continue
+
+            set_context(model_url, code_url or None, dataset_url or None)
+            yield model_url
+
+
 # ---------- commands ----------
 
 
 def cmd_install() -> int:
     logging.info("Installing dependencies from requirements.txt ...")
-
     print("Installing dependencies from requirements.txt ...")
 
     args = [sys.executable, "-m", "pip", "install", "-r", "requirements.txt"]
@@ -139,38 +152,36 @@ def cmd_install() -> int:
 
 def cmd_score(url_file: str) -> int:
     """
-    Read newline-delimited URLs from `url_file` and emit ONE NDJSON line
-    per MODEL URL only, using the full Table-1 schema with placeholder values.
-    Datasets and code URLs are ignored for output.
+    Read CSV triplets from `url_file` and emit ONE NDJSON line per MODEL.
+    The metrics can read code/dataset URLs from the shared context.
     """
     try:
-        urls = _read_urls(url_file)
+        Path(url_file).resolve(strict=True)
     except OSError as e:
-        logging.error("failed to read URL FILE: %s", e)
+        logging.error("failed to access URL FILE: %s", e)
+        print(f"Failed to access URL file '{url_file}': {e}", file=sys.stderr)
         print(json.dumps({"event": "error", "error": str(e), "url_file": url_file}))
         return 1
 
-    logging.info("Scoring %d URLs from %s ...", len(urls), url_file)
+    # fresh context per invocation
+    clear_url_ctx()
+    logging.info("Scoring URLs from %s ...", url_file)
 
-    for u in urls:
-        if not HF_MODEL.match(u):
-            logging.debug("Ignoring non-model URL: %s", u)
-            logging.debug("registered metrics: %s", [f for _, f, _ in registered()])
-            continue
-
-        def _make_metric_task(metric_func, model_url: str):
-            def task():
-                return metric_func(model_url)  # zero-arg callable for the pool
-
-            return task
-
-        # --- build tasks from registry (each compute(model_url) -> {"value", "latency_ms"}) ---
+    for u in _iter_models_from_csv(url_file):
+        # Build tasks from registry (each compute(model_url) -> {"value","latency_ms"})
         tasks = []
         for _, field, compute in registered():
-            # capture current compute and URL to avoid the late-binding lambda bug
-            tasks.append((field, _make_metric_task(compute, u)))
 
-        # run metrics in parallel
+            def _task(func=compute, model=u):
+                def run():
+                    # metrics that need code/dataset will fetch from url_ctx internally
+                    return func(model)
+
+                return run
+
+            tasks.append((field, _task()))
+
+        # Run metrics in parallel
         t0 = time.perf_counter()
         results = run_parallel(tasks, timeout_s=90)
         net_latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -201,8 +212,11 @@ def cmd_score(url_file: str) -> int:
         }
         net = float(combine(scalars))
 
+        repo_id, _ = to_repo_id(u)  # e.g. "google-bert/bert-base-uncased"
+        model_name = repo_id.split("/")[1]
+
         payload = {
-            "name": u,
+            "name": model_name,
             "category": "MODEL",
             "net_score": round(net, 3),
             "net_score_latency": net_latency_ms,
@@ -233,7 +247,6 @@ def cmd_test() -> int:
     Run pytest under coverage and print exactly:
       'X/Y test cases passed. Z% line coverage achieved.'
     """
-
     logging.info("Running tests with coverage...")
 
     cov_ok = True
@@ -270,7 +283,9 @@ def main(argv: list[str] | None = None) -> int:
     sub.add_parser("install")
 
     p_score = sub.add_parser("score")
-    p_score.add_argument("url_file", help="Text file with one URL per line")
+    p_score.add_argument(
+        "url_file", help="CSV file with rows: code_url, dataset_url, model_url"
+    )
 
     sub.add_parser("test")
 
