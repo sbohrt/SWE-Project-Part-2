@@ -1,6 +1,7 @@
 import os
 import re
 import time
+from typing import Optional, Tuple
 
 from swe_project.core.hf_client import download_snapshot, model_info
 from swe_project.metrics.base import register
@@ -24,7 +25,7 @@ LICENSE_SCORES = {
 }
 
 
-def normalize_license(raw: str | None) -> tuple[float, str]:
+def normalize_license(raw: Optional[str]) -> Tuple[float, str]:
     """normalize raw license string to score + SPDX-like identifier."""
     if not raw:  # if there is no license info found
         return 0.0, "None"
