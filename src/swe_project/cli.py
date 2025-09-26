@@ -32,6 +32,14 @@ from swe_project.core.scoring import combine
 from swe_project.core.url_ctx import clear as clear_url_ctx
 from swe_project.core.url_ctx import set_context
 from swe_project.logger import setup_logging
+
+# Force load metric modules so they register with the central registry.
+from swe_project.metrics import code_quality  # noqa: F401
+from swe_project.metrics import dataset_and_code  # noqa: F401
+from swe_project.metrics import dataset_quality  # noqa: F401
+from swe_project.metrics import license  # noqa: F401
+from swe_project.metrics import performance_claims  # noqa: F401
+from swe_project.metrics import ramp_up_time  # noqa: F401
 from swe_project.metrics.base import registered
 
 # ---------------- URL patterns ----------------
