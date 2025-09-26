@@ -41,6 +41,7 @@ def _load_metrics() -> None:
     Called only by `cmd_score` so `install`/`test` don't require optional deps yet.
     """
     # Import inside function to avoid ImportError before `install` runs.
+    from swe_project.metrics import bus_factor  # noqa: F401
     from swe_project.metrics import code_quality  # noqa: F401
     from swe_project.metrics import dataset_and_code  # noqa: F401
     from swe_project.metrics import dataset_quality  # noqa: F401

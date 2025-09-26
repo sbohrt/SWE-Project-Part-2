@@ -8,7 +8,7 @@ from pathlib import Path
 # Add "<repo>/src" to the Python import path so "python -m swe_project.cli" works
 ROOT = Path(__file__).resolve().parent
 src_path = str(ROOT / "src")
-os.environ["PYTHONPATH"] = f"{src_path}{os.pathsep}{os.environ.get('PYTHONPATH','')}"
+os.environ["PYTHONPATH"] = f"{src_path}{os.pathsep}{os.environ.get('PYTHONPATH', '')}"
 
 # Convenience: allow "./run URL_FILE" -> "./run score URL_FILE"
 argv = sys.argv[1:]

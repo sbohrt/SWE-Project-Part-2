@@ -13,10 +13,17 @@ repos:
         args: ["--profile", "black"]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
-    rev: v1.4.1
+    rev: v1.10.0  # or whatever you already use
     hooks:
       - id: mypy
-        args: ["--config-file", "mypy.ini"]
+        args:
+          - --install-types
+          - --non-interactive
+        additional_dependencies:
+          - types-requests
+          - types-urllib3
+          # (optional, but keeps versions recent)
+          - huggingface-hub>=0.25
 
   - repo: https://github.com/pycqa/flake8
     rev: 6.1.0
