@@ -1,4 +1,5 @@
 import os
+import re
 import time
 
 from swe_project.core.hf_client import download_snapshot
@@ -12,7 +13,7 @@ def compute(model_url: str):
     """
     t0 = time.perf_counter()
 
-    # convert HF URL into repo_id (org/repo)
+    # Convert HF URL into repo_id (org/repo)
     repo_id = model_url.replace("https://huggingface.co/", "").strip("/")
 
     # download README.md (if exists)
@@ -28,8 +29,7 @@ def compute(model_url: str):
     with open(readme_file, "r", encoding="utf-8") as f:
         readme_text = f.read()
 
-    # send the readme to the llm for evaluation
-    # asking llm for a score between 0 and 1 based on the given criteria
+    # ask LLM to give a score based on documentation clarity
     response = ask_llm(
         [
             {
@@ -38,26 +38,34 @@ def compute(model_url: str):
             },
             {
                 "role": "user",
-                "content": f"Rate the clarity and completeness of this README in a single \
-                number between 0 for the worst documentation and 1 for the perfect documentation.This is used to \
-                measure the ramp-up time based on how informative and \
-                clear the documentation in the README is:\n\n{readme_text[:4000]}",
+                "content": (
+                    "Rate the clarity and completeness of this README in a single number "
+                    "between 0 (worst) and 1 (best). Respond with just the number.\n\n"
+                    f"{readme_text[:4000]}"
+                ),
             },
         ]
     )
 
-    # try to parse the response as a float between 0 and 1
-    try:
-        score = max(0.0, min(1.0, float(response)))
-    except ValueError:
-        score = 0.0  # fallback if LLM doesn’t give a number
+    score = 0.0
+    if response:
+        # Try direct float parse first (this is because sometimes the gen ai gives numbers and words as well)
+        try:
+            score = float(response.strip())
+        except ValueError:
+            # Fallback: extract first number in response
+            m = re.search(r"\b(0(?:\.\d+)?|1(?:\.0+)?)\b", response)
+            if m:
+                score = float(m.group(1))
+
+    # Clamp between 0 and 1
+    score = max(0.0, min(1.0, score))
 
     return {
         "value": score,
         "latency_ms": int((time.perf_counter() - t0) * 1000),
     }
 
-    # register the metric
 
-
+# Register the metric
 register("ramp_up_time", "ramp_up_time", compute)
