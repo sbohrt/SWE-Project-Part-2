@@ -48,6 +48,7 @@ def _load_metrics() -> None:
     from swe_project.metrics import license  # noqa: F401
     from swe_project.metrics import performance_claims  # noqa: F401
     from swe_project.metrics import ramp_up_time  # noqa: F401
+    from swe_project.metrics import size_score  # noqa: F401
 
 
 # ---------------- URL patterns ----------------
