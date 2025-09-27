@@ -1,25 +1,21 @@
 import os
-from typing import Dict, List, cast
+from typing import Dict, List
 
+import requests
 from dotenv import load_dotenv
-from openai import OpenAI
 
-# Load .env
+# Load .env file
 load_dotenv()
 
-API_KEY = os.getenv("API_KEY")
+API_KEY = os.getenv("GEN_AI_STUDIO_API_KEY")
 if not API_KEY:
-    raise RuntimeError("Missing DEEPSEEK_API_KEY in .env")
+    raise RuntimeError("Missing GEN_AI_STUDIO_API_KEY in .env")
 
-MODEL = os.getenv(
-    "LLM_MODEL", "deepseek/deepseek-chat-v3.1:free"
-)  # default model if no model specified in .env
+# base URL for purdue api
+BASE_URL = "https://genai.rcac.purdue.edu/api/chat/completions"
 
-
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=API_KEY,
-)
+# default model in case env not set
+MODEL = os.getenv("LLM_MODEL", "llama3.1:latest")
 
 
 def ask_llm(
@@ -27,10 +23,35 @@ def ask_llm(
     model: str = MODEL,
     temperature: float = 0.0,
 ) -> str:
-    """wrapper for OpenRouter LLMs."""
-    response = client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-    )
-    return cast(str, response.choices[0].message.content.strip())
+    """
+    General-purpose wrapper for Purdue GenAI Studio using raw requests.
+    Sends a list of messages [{role: "user"/"system", content: "..."}]
+    and returns the model's text output as a string.
+    """
+
+    headers = {
+        "Authorization": f"Bearer {API_KEY}",
+        "Content-Type": "application/json",
+    }
+
+    payload = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+    }
+
+    try:
+        response = requests.post(BASE_URL, headers=headers, json=payload, timeout=60)
+        response.raise_for_status()
+        data = response.json()
+
+        # parse response
+        content = data["choices"][0]["message"]["content"]
+        return str(content.strip()) if content else ""
+
+    except requests.exceptions.RequestException as e:
+        print(f"[LLM ERROR] Request failed: {e}")
+        return ""
+    except (KeyError, IndexError) as e:
+        print(f"[LLM ERROR] Unexpected response format: {e}")
+        return ""
