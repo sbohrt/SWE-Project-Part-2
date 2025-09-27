@@ -1,67 +1,127 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import time
 from typing import Any
 
+import requests
+
 from swe_project.core.hf_client import model_info
 from swe_project.core.model_url import to_repo_id
-
-# NEW: pull code_url from the CSV context (if present)
-# (If code_url is GitHub (not HF), we intentionally keep the original behavior
-# and still inspect the HF model repo (no logic change)).
-from swe_project.core.url_ctx import get_code_url
 from swe_project.metrics.base import MetricResult, register
 
 NAME, FIELD = "code_quality", "code_quality"
 
 
-def compute(model_url: str) -> MetricResult:
-    """
-    Computes a code quality score based on the presence of key files in the model repo.
-    Metric suggested by LLM: Gemini.
-    Prompt: What would be a good metric to measure the code quality of a model repo?
+def get_github_repo_files(repo_url: str) -> set[str]:
+    match = re.search(r"github\.com/([^/]+)/([^/]+)", repo_url.replace(".git", ""))
+    if not match:
+        return set()
 
-    The score is based on:
-    - 0.4 points for a requirements.txt or pyproject.toml file.
-    - 0.3 points for any Python (.py) source files.
-    - 0.3 points for a config.json file.
-    """
-    t0 = time.perf_counter()
+    owner, repo = match.groups()
+    headers = {}
+    if token := os.environ.get("GITHUB_TOKEN"):
+        headers["Authorization"] = f"token {token}"
+
+    try:
+        repo_info_url = f"https://api.github.com/repos/{owner}/{repo}"
+        response = requests.get(repo_info_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        default_branch = response.json().get("default_branch", "main")
+
+        trees_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1"
+        response = requests.get(trees_url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+
+        return {item["path"] for item in data.get("tree", []) if item["type"] == "blob"}
+    except requests.RequestException as e:
+        logging.error(f"Failed to fetch files from GitHub repo {repo_url}: {e}")
+        return set()
+
+
+def _score_single_url(analysis_url: str) -> float:
     score = 0.0
     try:
-        # NEW
-        prefer_url = get_code_url(model_url) or model_url
-        rid, _ = to_repo_id(prefer_url)
+        filenames = set()
+        is_github = "github.com" in analysis_url
 
-        info: Any = model_info(rid)
+        if is_github:
+            filenames = get_github_repo_files(analysis_url)
+        else:
+            rid, _ = to_repo_id(analysis_url)
+            info: Any = model_info(rid)
+            siblings = getattr(info, "siblings", [])
+            filenames = {s.rfilename for s in siblings}
 
-        siblings = getattr(info, "siblings", [])
-        filenames = {s.rfilename for s in siblings}
+        total_files = len(filenames)
 
-        # 1. Check for dependency management files.
-        if "requirements.txt" in filenames or "pyproject.toml" in filenames:
-            score += 0.4
-
-        # 2. Check for Python source code.
-        if any(f.endswith(".py") for f in filenames):
-            score += 0.3
-
-        # 3. Check for a model configuration file.
-        if "config.json" in filenames:
-            score += 0.3
+        if total_files > 0:
+            if is_github:
+                if "requirements.txt" in filenames:
+                    score += 0.5
+                py_files_count = sum(1 for f in filenames if f.endswith(".py"))
+                if py_files_count > 0:
+                    score += (py_files_count / total_files) * 0.5
+            else:
+                py_files_count = sum(1 for f in filenames if f.endswith(".py"))
+                has_deps = (
+                    "requirements.txt" in filenames
+                    or "pyproject.toml" in filenames
+                    or "config.json" in filenames
+                )
+                if py_files_count > 0:
+                    if has_deps:
+                        score += 0.3
+                    score += (py_files_count / total_files) * 0.7
+                elif has_deps:
+                    score = 0.3
 
     except Exception:
-        logging.exception("%s failed for %s", NAME, model_url)
-        score = 0.0
+        logging.exception("Sub-computation failed for %s", analysis_url)
+        return 0.0
 
-    final_score = max(0.0, min(1.0, score))
+    return score
 
+
+def compute(input_line: str) -> MetricResult:
+    t0 = time.perf_counter()
+    total_score = 0.0
+    urls = [url.strip() for url in input_line.split(",") if url.strip()]
+
+    relevant_urls = [
+        url
+        for url in urls
+        if "github.com" in url or ("huggingface.co" in url and "/datasets/" not in url)
+    ]
+
+    if not relevant_urls:
+        return {
+            "value": 0.0,
+            "latency_ms": int(round((time.perf_counter() - t0) * 1000)),
+        }
+
+    for url in relevant_urls:
+        total_score += _score_single_url(url)
+
+    final_score = max(0.0, min(1.0, total_score))
     return {
         "value": float(final_score),
-        # lentency
         "latency_ms": int(round((time.perf_counter() - t0) * 1000)),
     }
 
 
 register(NAME, FIELD, compute)
+
+# if __name__ == "__main__":
+#     import sys
+#     import json
+
+#     if len(sys.argv) > 1:
+#         input_line = " ".join(sys.argv[1:])
+#         result = compute(input_line=input_line)
+#         print(json.dumps(result))
+#     else:
+#         print("Usage: python -m swe_project.metrics.code_quality <URL1, URL2, ...>", file=sys.stderr)
