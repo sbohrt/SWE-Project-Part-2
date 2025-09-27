@@ -68,6 +68,7 @@ def compute(model_url: str) -> MetricResult:
 
     return {
         "value": float(max(0.0, min(1.0, final_score))),
+        # latency added
         "latency_ms": int(round((time.perf_counter() - t0) * 1000)),
     }
 
