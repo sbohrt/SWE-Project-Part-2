@@ -112,47 +112,36 @@ def _in_venv() -> bool:
 
 def _iter_models_from_csv(path: str):
     """
-    Accept both comma-separated and whitespace-separated URL files.
-    One input line -> at most 3 tokens:
-        model_url [code_url] [dataset_url]
-    (Extra tokens on a line are ignored.)
-    For each valid model_url line, set URL context and yield model_url.
+    Read CSV rows of the form: code_url, dataset_url, model_url
+    - code_url or dataset_url may be blank
+    - model_url must be a valid HF model URL to be yielded
+    For each valid row:
+      - store (code,dataset) context for that model
+      - yield the model URL
     """
     with open(path, "r", encoding="utf-8", newline="") as f:
-        for raw in f:
-            line = raw.strip()
-            if not line or line.startswith("#"):
+        reader = csv.reader(f)
+        for row in reader:
+            if not row:
+                continue
+            # allow comment lines if first cell starts with '#'
+            if row[0].strip().startswith("#"):
                 continue
 
-            # 1) Try CSV split
-            row = next(csv.reader([line]))
-            # 2) If CSV produced a single wide cell (whitespace-separated),
-            #    fall back to whitespace splitting.
-            if len(row) == 1:
-                parts = row[0].split()
-            else:
-                # trim CSV cells and drop empties
-                parts = [c.strip() for c in row if c and c.strip()]
+            # normalize to length >= 3
+            cells = [c.strip() for c in row]
+            # pad short rows (defensive)
+            while len(cells) < 3:
+                cells.insert(0, "")
 
-            if not parts:
+            code_url, dataset_url, model_url = cells[-3], cells[-2], cells[-1]
+
+            if not model_url:
+                # malformed: no model URL provided
                 continue
 
-            # Keep only the first 3 tokens (ignore extras)
-            parts = parts[:3]
-
-            # Normalize to (model, code, dataset) order.
-            # We accept both:
-            #   model
-            #   model code
-            #   model code dataset
-            # If your spec expects (code, dataset, model) in true CSV,
-            # that still works because many graders provide whitespace "model [code] [dataset]".
-            model_url = parts[0]
-            code_url = parts[1] if len(parts) >= 2 else None
-            dataset_url = parts[2] if len(parts) >= 3 else None
-
-            # Validate model URL
             if not HF_MODEL.match(model_url):
+                # ignore non-model rows
                 continue
 
             set_context(model_url, code_url or None, dataset_url or None)
@@ -265,7 +254,7 @@ def cmd_score(url_file: str) -> int:
             "code_quality": scalars["code_quality"],
             "code_quality_latency": _lat("code_quality"),
         }
-        print(json.dumps(payload), flush=True)
+        print(json.dumps(payload))
 
     return 0
 
