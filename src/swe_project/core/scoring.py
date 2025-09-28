@@ -8,7 +8,7 @@ DEFAULT_WEIGHTS: Dict[str, float] = {
     "bus_factor": 0.10,
     "license": 0.10,
     "size_score": 0.10,  # average across device scores
-    "dataset_and_code_score": 0.15,
+    "dataset_and_code": 0.15,
     "dataset_quality": 0.15,
     "code_quality": 0.10,
     "performance_claims": 0.15,
