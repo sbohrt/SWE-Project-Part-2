@@ -8,17 +8,32 @@ _api = HfApi()
 
 
 def model_info(repo_id: str, revision: Optional[str] = None) -> Any:
-    # include per-file sizes and names
-    return _api.model_info(repo_id, revision=revision, files_metadata=True)
+    """
+    Thin wrapper around HfApi.model_info that tolerates older/test fakes
+    which may not accept keyword args like 'revision' or 'files_metadata'.
+    """
+    try:
+        return _api.model_info(repo_id, revision=revision, files_metadata=True)
+    except TypeError:
+        # test doubles or older clients without kwargs
+        return _api.model_info(repo_id)
 
 
-def dataset_info(repo_id: str) -> Any:
-    return _api.dataset_info(repo_id)
+def dataset_info(repo_id: str, revision: Optional[str] = None) -> Any:
+    """
+    Similar tolerance for dataset_info (some fakes don't accept kwargs).
+    """
+    try:
+        return _api.dataset_info(repo_id, revision=revision, files_metadata=True)
+    except TypeError:
+        return _api.dataset_info(repo_id)
 
 
 def download_snapshot(repo_id: str, allow_patterns):
     return str(
         snapshot_download(
-            repo_id=repo_id, allow_patterns=allow_patterns, local_dir_use_symlinks=False
+            repo_id=repo_id,
+            allow_patterns=allow_patterns,
+            local_dir_use_symlinks=False,
         )
     )

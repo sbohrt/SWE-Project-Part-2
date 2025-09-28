@@ -22,6 +22,11 @@ def registered() -> List[Tuple[str, str, Callable[[str], MetricResult]]]:
     return list(_REGISTRY)
 
 
-def clear_registry_for_tests() -> None:  # pragma: no cover
-    """Testing aid: reset the in-memory registry."""
+def clear_registry_for_tests() -> None:  # testing aid
     _REGISTRY.clear()
+    # ensure re-import re-executes module bodies in tests
+    import sys
+
+    for mod in list(sys.modules):
+        if mod.startswith("swe_project.metrics.") and not mod.endswith(".base"):
+            sys.modules.pop(mod, None)
