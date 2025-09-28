@@ -4,7 +4,7 @@ import logging
 import os
 import re
 import time
-from typing import Any
+from typing import Any, Dict, Optional
 
 import requests
 
@@ -15,30 +15,93 @@ from swe_project.metrics.base import MetricResult, register
 NAME, FIELD = "dataset_and_code_score", "dataset_and_code_score"
 
 
+def _gh_headers() -> Dict[str, str]:
+    """Creates headers for GitHub API requests, including authorization if available."""
+    hdrs: Dict[str, str] = {
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "swe-project-dataset-and-code/1.0",
+    }
+    tok = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
+    if tok and tok.lower() not in {"invalid", "none", "placeholder"}:
+        hdrs["Authorization"] = f"Bearer {tok}"
+    return hdrs
+
+
+def _gh_get(
+    url: str, params: Optional[Dict[str, str]] = None, timeout: int = 10
+) -> Optional[requests.Response]:
+    """
+    Performs a GET request to the GitHub API with robust error handling.
+    Retries once without authorization on 401/403 errors.
+    """
+    params = params or {}
+    hdrs = _gh_headers()
+    try:
+        res = requests.get(url, headers=hdrs, params=params, timeout=timeout)
+    except requests.RequestException as e:
+        logging.warning("[dataset_and_code] Network error for %s: %s", url, e)
+        return None
+
+    text_lower = (res.text or "").lower()
+    if res.status_code in (401, 403) and (
+        "bad credentials" in text_lower or "requires authentication" in text_lower
+    ):
+        # Retry once without the auth header if token is bad
+        hdrs = {k: v for k, v in hdrs.items() if k.lower() != "authorization"}
+        try:
+            res = requests.get(url, headers=hdrs, params=params, timeout=timeout)
+        except requests.RequestException as e:
+            logging.warning(
+                "[dataset_and_code] Retry without auth failed for %s: %s", url, e
+            )
+            return None
+
+    if res.status_code != 200:
+        logging.warning(
+            "[dataset_and_code] GET %s returned status %s", url, res.status_code
+        )
+        return None
+    return res
+
+
 def get_github_repo_files(repo_url: str) -> set[str]:
+    """Fetches the list of all files in a GitHub repository's default branch."""
     match = re.search(r"github\.com/([^/]+)/([^/]+)", repo_url.replace(".git", ""))
     if not match:
         return set()
 
     owner, repo = match.groups()
-    headers = {}
-    if token := os.environ.get("GITHUB_TOKEN"):
-        headers["Authorization"] = f"token {token}"
+
+    # Get repository info to find the default branch
+    repo_info_url = f"https://api.github.com/repos/{owner}/{repo}"
+    repo_res = _gh_get(repo_info_url)
+    if not repo_res:
+        logging.error(f"Failed to fetch repo info from {repo_info_url}")
+        return set()
 
     try:
-        repo_info_url = f"https://api.github.com/repos/{owner}/{repo}"
-        response = requests.get(repo_info_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        default_branch = response.json().get("default_branch", "main")
+        default_branch = repo_res.json().get("default_branch", "main")
+    except (requests.exceptions.JSONDecodeError, AttributeError):
+        logging.error(f"Could not parse JSON or find default_branch for {repo_url}")
+        return set()
 
-        trees_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1"
-        response = requests.get(trees_url, headers=headers, timeout=10)
-        response.raise_for_status()
-        data = response.json()
+    # Get the file tree for the default branch
+    trees_url = f"https://api.github.com/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1"
+    tree_res = _gh_get(trees_url)
+    if not tree_res:
+        logging.error(f"Failed to fetch file tree from {trees_url}")
+        return set()
 
+    try:
+        data = tree_res.json()
+        if "tree" not in data:
+            logging.warning(
+                f"Response from {trees_url} is truncated: {data.get('message', '')}"
+            )
+            return set()
         return {item["path"] for item in data.get("tree", []) if item["type"] == "blob"}
-    except requests.RequestException as e:
-        logging.error(f"Failed to fetch files from GitHub repo {repo_url}: {e}")
+    except (requests.exceptions.JSONDecodeError, AttributeError):
+        logging.error(f"Could not parse JSON response for file tree of {repo_url}")
         return set()
 
 
@@ -101,6 +164,7 @@ def compute(input_line: str) -> MetricResult:
 
 register(NAME, FIELD, compute)
 
+
 if __name__ == "__main__":
     import json
     import sys
@@ -114,42 +178,3 @@ if __name__ == "__main__":
             "Usage: python -m swe_project.metrics.dataset_and_code_score <URL1, URL2, ...>",
             file=sys.stderr,
         )
-
-# if __name__ == "__main__":
-#     import sys
-#     import json
-#     import os
-
-#     if len(sys.argv) > 1:
-#         first_arg = sys.argv[1]
-#         lines_to_process = []
-
-#         # Check if the input is a file path that exists
-#         if os.path.isfile(first_arg):
-#             try:
-#                 with open(first_arg, 'r') as f:
-#                     lines_to_process = f.readlines()
-#             except IOError as e:
-#                 print(f"Error reading file: {e}", file=sys.stderr)
-#                 sys.exit(1)
-#         else:
-#             # If not a file, treat all arguments as one comma-separated line
-#             lines_to_process = [" ".join(sys.argv[1:])]
-
-#         for line in lines_to_process:
-#             line = line.strip()
-#             if not line:
-#                 continue
-
-#             result = compute(input_line=line)
-#             # Add the original line to the output for context during testing
-#             output_data = {
-#                 "input_line": line,
-#                 "dataset_and_code_score": result["value"],
-#                 "dataset_and_code_score_latency": result["latency_ms"]
-#             }
-#             print(json.dumps(output_data))
-
-#     else:
-#         print("Usage 1 (for autograder): python -m ... <path_to_url_file>", file=sys.stderr)
-#         print("Usage 2 (for testing):  python -m ... <URL1, URL2, ...>", file=sys.stderr)
