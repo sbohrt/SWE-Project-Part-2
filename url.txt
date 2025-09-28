@@ -7,7 +7,15 @@ https://github.com/google-research/bert, https://huggingface.co/datasets/bookcor
 ,,https://huggingface.co/gpt2
 ,,https://huggingface.co/facebook/bart-base
 ,,https://huggingface.co/google/vit-base-patch16-224
-,,https://huggingface.co/facebook/wav2vec2-base-960h
+https://github.com/pytorch/audio, https://huggingface.co/datasets/common_voice, https://huggingface.co/facebook/wav2vec2-base-960h
 ,,https://huggingface.co/microsoft/resnet-50
 ,,https://huggingface.co/deepset/roberta-base-squad2
+,,https://discord.com
+,,ftp://example.com/file.txt
+,,https://example.com/not-hf
+,,https://huggingface.co/
+,,https://huggingface.co/models
+,,https://huggingface.co/docs
+https://github.com/UKPLab/sentence-transformers, https://huggingface.co/datasets/quora, https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2
+
 
