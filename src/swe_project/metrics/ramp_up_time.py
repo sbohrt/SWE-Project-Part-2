@@ -10,15 +10,19 @@ from swe_project.metrics.base import register
 def compute(model_url: str):
     """
     Compute ramp-up time score by analyzing README with LLM.
+    Supports both Hugging Face repos and local absolute paths.
     """
     t0 = time.perf_counter()
 
-    # Convert HF URL into repo_id (org/repo)
-    repo_id = model_url.replace("https://huggingface.co/", "").strip("/")
+    # case 1: Local repo path
+    if os.path.isabs(model_url) and os.path.exists(model_url):
+        readme_file = os.path.join(model_url, "README.md")
 
-    # download README.md (if exists)
-    local_path = download_snapshot(repo_id, allow_patterns=["README.md"])
-    readme_file = os.path.join(local_path, "README.md")
+    else:
+        # case 2: hugging Face repo
+        repo_id = model_url.replace("https://huggingface.co/", "").strip("/")
+        local_path = download_snapshot(repo_id, allow_patterns=["README.md"])
+        readme_file = os.path.join(local_path, "README.md")
 
     if not os.path.exists(readme_file):
         return {
@@ -29,7 +33,6 @@ def compute(model_url: str):
     with open(readme_file, "r", encoding="utf-8") as f:
         readme_text = f.read()
 
-    # ask LLM to give a score based on documentation clarity
     response = ask_llm(
         [
             {
@@ -49,16 +52,13 @@ def compute(model_url: str):
 
     score = 0.0
     if response:
-        # Try direct float parse first (this is because sometimes the gen ai gives numbers and words as well)
         try:
             score = float(response.strip())
         except ValueError:
-            # Fallback: extract first number in response
             m = re.search(r"\b(0(?:\.\d+)?|1(?:\.0+)?)\b", response)
             if m:
                 score = float(m.group(1))
 
-    # Clamp between 0 and 1
     score = max(0.0, min(1.0, score))
 
     return {
@@ -67,5 +67,4 @@ def compute(model_url: str):
     }
 
 
-# Register the metric
 register("ramp_up_time", "ramp_up_time", compute)
