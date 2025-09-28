@@ -17,7 +17,6 @@ import argparse
 import csv
 import json
 import logging
-import os
 import re
 import subprocess
 import sys
@@ -28,7 +27,7 @@ from typing import List, Tuple
 # Ensure metric modules auto-register via package import side-effects.
 from swe_project import metrics  # noqa: F401
 from swe_project.core.exec_pool import run_parallel
-from swe_project.core.model_url import to_repo_id
+from swe_project.core.model_url import is_hf_model_url, to_repo_id
 from swe_project.core.scoring import combine
 from swe_project.core.url_ctx import clear as clear_url_ctx
 from swe_project.core.url_ctx import set_context
@@ -50,16 +49,6 @@ def _load_metrics() -> None:
     from swe_project.metrics import performance_claims  # noqa: F401
     from swe_project.metrics import ramp_up_time  # noqa: F401
     from swe_project.metrics import size_score  # noqa: F401
-
-
-# ---------------- URL patterns ----------------
-
-# Valid HF model URL: huggingface.co/{org}/{repo} with optional /tree|resolve/<branch>/...
-HF_MODEL = re.compile(
-    r"https?://(?:www\.)?huggingface\.co/(?!datasets/)[^/\s]+/[^/\s]+"
-    r"(?:/(?:tree|resolve)/[^/\s]+(?:/[^ \t\n\r\f\v]*)?)?$",
-    re.IGNORECASE,
-)
 
 
 # ---------- helpers ----------
@@ -139,11 +128,7 @@ def _iter_models_from_csv(path: str):
             if not model_url:
                 continue
 
-            # accept if HF URL OR local absolute path
-            if not (
-                HF_MODEL.match(model_url)
-                or (os.path.isabs(model_url) and os.path.exists(model_url))
-            ):
+            if not is_hf_model_url(model_url):
                 continue
 
             set_context(model_url, code_url or None, dataset_url or None)
@@ -232,14 +217,7 @@ def cmd_score(url_file: str) -> int:
         net = float(combine(scalars))
 
         repo_id, _ = to_repo_id(u)  # e.g. "google-bert/bert-base-uncased"
-
-        if os.path.isabs(repo_id):
-            # Local repo: use the folder name as model_name
-            model_name = os.path.basename(repo_id.rstrip(os.sep))
-        else:
-            # HF repo: use org/repo split
-            parts = repo_id.split("/")
-            model_name = parts[1] if len(parts) > 1 else repo_id
+        model_name = re.split(r"[\\/]", repo_id.rstrip("/\\"))[-1]
 
         payload = {
             "name": model_name,
