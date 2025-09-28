@@ -12,7 +12,7 @@ from swe_project.core.hf_client import model_info
 from swe_project.core.model_url import to_repo_id
 from swe_project.metrics.base import MetricResult, register
 
-NAME, FIELD = "dataset_and_code", "dataset_and_code"
+NAME, FIELD = "dataset_and_code_score", "dataset_and_code_score"
 
 
 def get_github_repo_files(repo_url: str) -> set[str]:
