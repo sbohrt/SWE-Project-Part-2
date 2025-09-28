@@ -17,6 +17,7 @@ import argparse
 import csv
 import json
 import logging
+import os
 import re
 import subprocess
 import sys
@@ -114,7 +115,9 @@ def _iter_models_from_csv(path: str):
     """
     Read CSV rows of the form: code_url, dataset_url, model_url
     - code_url or dataset_url may be blank
-    - model_url must be a valid HF model URL to be yielded
+    - model_url must be either:
+        - a valid Hugging Face model URL, OR
+        - an absolute path to a local repo
     For each valid row:
       - store (code,dataset) context for that model
       - yield the model URL
@@ -124,24 +127,23 @@ def _iter_models_from_csv(path: str):
         for row in reader:
             if not row:
                 continue
-            # allow comment lines if first cell starts with '#'
             if row[0].strip().startswith("#"):
                 continue
 
-            # normalize to length >= 3
             cells = [c.strip() for c in row]
-            # pad short rows (defensive)
             while len(cells) < 3:
                 cells.insert(0, "")
 
             code_url, dataset_url, model_url = cells[-3], cells[-2], cells[-1]
 
             if not model_url:
-                # malformed: no model URL provided
                 continue
 
-            if not HF_MODEL.match(model_url):
-                # ignore non-model rows
+            # accept if HF URL OR local absolute path
+            if not (
+                HF_MODEL.match(model_url)
+                or (os.path.isabs(model_url) and os.path.exists(model_url))
+            ):
                 continue
 
             set_context(model_url, code_url or None, dataset_url or None)
@@ -230,7 +232,14 @@ def cmd_score(url_file: str) -> int:
         net = float(combine(scalars))
 
         repo_id, _ = to_repo_id(u)  # e.g. "google-bert/bert-base-uncased"
-        model_name = repo_id.split("/")[1]
+
+        if os.path.isabs(repo_id):
+            # Local repo: use the folder name as model_name
+            model_name = os.path.basename(repo_id.rstrip(os.sep))
+        else:
+            # HF repo: use org/repo split
+            parts = repo_id.split("/")
+            model_name = parts[1] if len(parts) > 1 else repo_id
 
         payload = {
             "name": model_name,

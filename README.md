@@ -6,9 +6,6 @@ python -m venv .venv
 
 This activates the venv so that the updates to the dependencies are made in the environment we made.
 
-
-
-
 Then those
 pip install --upgrade pip
 pip install -r requirements-dev.txt
@@ -16,4 +13,3 @@ pip install -r requirements-dev.txt
 Then those
 pre-commit install
 pre-commit run --all-files
-
