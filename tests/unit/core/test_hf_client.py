@@ -36,7 +36,9 @@ def test_dataset_info_calls_hfapi(monkeypatch):
 def test_download_snapshot_passes_through(monkeypatch, tmp_path):
     captured = {}
 
-    def fake_snapshot_download(*, repo_id, allow_patterns, local_dir_use_symlinks):
+    def fake_snapshot_download(
+        *, repo_id, allow_patterns, local_dir_use_symlinks, **kwargs
+    ):
         captured["repo_id"] = repo_id
         captured["allow_patterns"] = allow_patterns
         captured["symlinks"] = local_dir_use_symlinks
