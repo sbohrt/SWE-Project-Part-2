@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import Any, Optional
 
 from huggingface_hub import HfApi, snapshot_download
+from tqdm.auto import tqdm  # needed to silence the progress bars
 
 _api = HfApi()
 
@@ -29,11 +30,21 @@ def dataset_info(repo_id: str, revision: Optional[str] = None) -> Any:
         return _api.dataset_info(repo_id)
 
 
+# this is to silence the progress bars from huggingface_hub snapshot_download
+class SilentTqdm(tqdm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, disable=True)
+
+
+# what we did was to create a subclass of tqdm that is always disabled, and pass it to snapshot_download
+
+
 def download_snapshot(repo_id: str, allow_patterns):
     return str(
         snapshot_download(
             repo_id=repo_id,
             allow_patterns=allow_patterns,
             local_dir_use_symlinks=False,
+            tqdm_class=SilentTqdm,
         )
     )
