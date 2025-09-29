@@ -100,3 +100,7 @@ $LOG_LEVEL: The verbosity level for logging.
 1: Informational messages
 
 2: Debug messages
+
+
+**Note:**
+You might need to install the venv and activate it to be able to run the program.
