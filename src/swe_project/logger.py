@@ -16,33 +16,14 @@ def setup_logging() -> None:
     }
     log_level = level_map.get(log_level_str, logging.CRITICAL + 1)
 
-    # Validate log file path
-    # If path contains directory components, check if directory exists and is writable
-    log_dir = os.path.dirname(log_file)
+    # check if the directory exists
+    log_dir = os.path.dirname(log_file) or "."
+    if not os.path.exists(log_dir):
+        # terminate with exit code 1 if directory doesn't exist
+        print(f"Invalid LOG_FILE path: {log_file}", file=sys.stderr)
+        sys.exit(1)
 
-    if log_dir:  # If there's a directory component in the path
-        if not os.path.exists(log_dir):
-            print(
-                f"Error: Directory '{log_dir}' does not exist for LOG_FILE '{log_file}'",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-        if not os.access(log_dir, os.W_OK):
-            print(
-                f"Error: Directory '{log_dir}' is not writable for LOG_FILE '{log_file}'",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-    else:
-        # If no directory specified (just a filename), check current directory
-        if not os.access(".", os.W_OK):
-            print(
-                f"Error: Current directory is not writable for LOG_FILE '{log_file}'",
-                file=sys.stderr,
-            )
-            sys.exit(1)
-
-    # if directory exists and is writable, set up logging normally
+    # if directory exists, set up logging normally
     logging.basicConfig(
         filename=log_file,
         level=log_level,
