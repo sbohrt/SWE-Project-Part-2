@@ -18,7 +18,7 @@ def setup_logging() -> None:
 
     # check if the directory exists
     log_dir = os.path.dirname(log_file) or "."
-    if not os.path.exists(log_dir):
+    if not os.path.exists(log_dir) or not os.access(log_dir, os.W_OK):
         # terminate with exit code 1 if directory doesn't exist
         print(f"Invalid LOG_FILE path: {log_file}", file=sys.stderr)
         sys.exit(1)

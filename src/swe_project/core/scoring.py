@@ -4,14 +4,14 @@ from typing import Dict
 
 # Adjust and document these report
 DEFAULT_WEIGHTS: Dict[str, float] = {
-    "ramp_up_time": 0.15,
-    "bus_factor": 0.10,
+    "ramp_up_time": 0.10,
+    "bus_factor": 0.05,
     "license": 0.10,
-    "size_score": 0.10,  # average across device scores
-    "dataset_and_code_score": 0.15,
+    "size_score": 0.05,  # average across device scores
+    "dataset_and_code_score": 0.10,
     "dataset_quality": 0.15,
-    "code_quality": 0.10,
-    "performance_claims": 0.15,
+    "code_quality": 0.25,
+    "performance_claims": 0.20,
 }
 
 
