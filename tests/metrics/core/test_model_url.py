@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import pytest
-
 from swe_project.core.model_url import is_hf_model_url, to_repo_id
 
 # ---------- to_repo_id ----------

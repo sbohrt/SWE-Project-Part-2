@@ -13,7 +13,6 @@ from typing import Any, Dict, Optional, Set, Tuple
 # third-party
 import requests
 from huggingface_hub import ModelCard
-
 from swe_project.core.hf_client import model_info
 from swe_project.core.model_url import to_repo_id
 from swe_project.core.url_ctx import get_code_url
