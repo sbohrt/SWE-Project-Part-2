@@ -5,5 +5,10 @@
     "python.linting.pylintEnabled": false,
     "python.linting.flake8Enabled": true,
     "python.linting.enabled": true,
-    "python.linting.mypyEnabled": true
+    "python.linting.mypyEnabled": true,
+    "cursorpyright.analysis.diagnosticMode": "workspace",
+    "cursorpyright.analysis.extraPaths": [
+        "src"
+    ],
+    "cursorpyright.analysis.typeCheckingMode": "basic"
 }
