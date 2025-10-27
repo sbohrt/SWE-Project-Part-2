@@ -1,0 +1,19 @@
+{
+  "threshold": 2,
+  "minTokens": 60,
+  "reporters": ["console"],
+  "ignore": [
+    "**/__pycache__/**",
+    "**/.venv/**",
+    "node_modules/**",
+    "coverage/**",
+    "dist/**",
+    "build/**",
+    "reports/**",
+    "docs/**",
+    "tests/fixtures/**"
+  ],
+  "patterns": [
+    "**/*.py"
+  ]
+}
