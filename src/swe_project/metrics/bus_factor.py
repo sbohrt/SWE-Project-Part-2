@@ -14,6 +14,8 @@ from typing import Any, Dict, Optional, Set, Tuple
 import requests
 from huggingface_hub import ModelCard
 
+from swe_project.core.gh_utils import gh_get as _gh_get
+from swe_project.core.gh_utils import gh_headers as _gh_headers
 from swe_project.core.hf_client import model_info
 from swe_project.core.model_url import to_repo_id
 from swe_project.core.url_ctx import get_code_url
@@ -118,6 +120,17 @@ def _list_active_since(
             except Exception:
                 pass
     return authors, newest
+
+
+def _next_link(link_header: str):
+    return next(
+        (
+            p[p.find("<") + 1 : p.find(">")]
+            for p in (link_header or "").split(",")
+            if 'rel="next"' in p
+        ),
+        None,
+    )
 
 
 def _contributors_score(n: int) -> float:
