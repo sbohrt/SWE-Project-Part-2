@@ -3,8 +3,9 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
-# Import the metric module with an alias to patch its 'model_info' symbol.
-from swe_project.metrics import dataset_and_code as dca
+from swe_project.metrics import (
+    dataset_and_code as dca,  # Import the metric module with an alias to patch its 'model_info' symbol.
+)
 
 
 def _create_mock_info(
