@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+
 from swe_project.metrics import license as lic
 
 # ---------- normalize_license ----------
