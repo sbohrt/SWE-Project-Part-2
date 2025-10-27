@@ -2,6 +2,12 @@ name: Super-Linter
 
 on: [push, pull_request]
 
+permissions:
+  contents: read
+  pull-requests: write   # for PR review comments
+  checks: write          # for creating/updating check-run annotations
+
+
 jobs: 
   super-lint:
     name: Lint code base
