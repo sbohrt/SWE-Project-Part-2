@@ -1,3 +1,4 @@
+# src/swe_project/core/gh_utils.py
 from __future__ import annotations
 
 import logging
@@ -6,7 +7,6 @@ import re
 from typing import Dict, Optional, Set
 
 import requests
-
 
 def gh_headers() -> Dict[str, str]:
     hdrs: Dict[str, str] = {
@@ -18,10 +18,7 @@ def gh_headers() -> Dict[str, str]:
         hdrs["Authorization"] = f"Bearer {tok}"
     return hdrs
 
-
-def gh_get(
-    url: str, params: Optional[Dict[str, str]] = None, timeout: int = 10
-) -> Optional[requests.Response]:
+def gh_get(url: str, params: Optional[Dict[str, str]] = None, timeout: int = 10) -> Optional[requests.Response]:
     params = params or {}
     hdrs = gh_headers()
     try:
@@ -30,10 +27,9 @@ def gh_get(
         logging.warning("[gh_utils] network error %s: %s", url, e)
         return None
 
-    tl = (res.text or "").lower()
-    if res.status_code in (401, 403) and (
-        "bad credentials" in tl or "requires authentication" in tl
-    ):
+    text_lower = (res.text or "").lower()
+    if res.status_code in (401, 403) and ("bad credentials" in text_lower or "requires authentication" in text_lower):
+        # retry once without auth
         hdrs = {k: v for k, v in hdrs.items() if k.lower() != "authorization"}
         try:
             res = requests.get(url, headers=hdrs, params=params, timeout=timeout)
@@ -46,11 +42,10 @@ def gh_get(
         return None
     return res
 
-
 _RE_GH = re.compile(r"github\.com/([^/]+)/([^/]+)")
 
-
 def get_github_repo_files(repo_url: str) -> Set[str]:
+    """List files (blob paths) on default branch of a GitHub repo."""
     m = _RE_GH.search(repo_url.replace(".git", ""))
     if not m:
         return set()
@@ -61,9 +56,7 @@ def get_github_repo_files(repo_url: str) -> Set[str]:
         return set()
     default_branch = (info.json() or {}).get("default_branch") or "main"
 
-    tree = gh_get(
-        f"https://api.github.com/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1"
-    )
+    tree = gh_get(f"https://api.github.com/repos/{owner}/{repo}/git/trees/{default_branch}?recursive=1")
     if not tree:
         return set()
     j = tree.json() or {}

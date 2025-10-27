@@ -14,11 +14,10 @@ from typing import Any, Dict, Optional, Set, Tuple
 import requests
 from huggingface_hub import ModelCard
 
-from swe_project.core.gh_utils import gh_get as _gh_get
-from swe_project.core.gh_utils import gh_headers as _gh_headers
 from swe_project.core.hf_client import model_info
 from swe_project.core.model_url import to_repo_id
 from swe_project.core.url_ctx import get_code_url
+from swe_project.core.gh_utils import gh_get as _gh_get, gh_headers as _gh_headers
 
 # local
 from swe_project.metrics.base import MetricResult, register
@@ -36,48 +35,6 @@ _GH_RE: Pattern[str] = re.compile(
 _GH_LINK_RE: Pattern[str] = re.compile(
     r"https?://github\.com/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+"
 )
-
-
-def _gh_headers() -> Dict[str, str]:
-    hdrs: Dict[str, str] = {
-        "Accept": "application/vnd.github+json",
-        "User-Agent": "swe-project-bus-factor/1.0",
-    }
-    tok = (os.environ.get("GITHUB_TOKEN") or os.environ.get("GH_TOKEN") or "").strip()
-    if tok and tok.lower() not in {"invalid", "none", "placeholder"}:
-        hdrs["Authorization"] = f"Bearer {tok}"
-    return hdrs
-
-
-def _gh_get(url: str, params: Optional[Dict[str, str]] = None, timeout: int = 10):
-    """Fail-soft GET: retry once without Authorization on 401/Bad credentials.
-    Returns a requests.Response on success, or None on failure.
-    """
-    params = params or {}
-    hdrs = _gh_headers()
-    try:
-        res = requests.get(url, headers=hdrs, params=params, timeout=timeout)
-    except requests.RequestException as e:
-        logging.warning("[bus_factor] network error %s: %s", url, e)
-        return None
-
-    text_lower = (res.text or "").lower()
-    if res.status_code in (401, 403) and (
-        "bad credentials" in text_lower or "requires authentication" in text_lower
-    ):
-        # Retry once without auth header
-        hdrs = {k: v for k, v in hdrs.items() if k.lower() != "authorization"}
-        try:
-            res = requests.get(url, headers=hdrs, params=params, timeout=timeout)
-        except requests.RequestException as e:
-            logging.warning("[bus_factor] retry without auth failed %s: %s", url, e)
-            return None
-
-    if res.status_code != 200:
-        logging.warning("[bus_factor] GET %s -> %s", url, res.status_code)
-        return None
-    return res
-
 
 def _parse_gh(url: str) -> Optional[Tuple[str, str]]:
     m = _GH_RE.search(url or "")
@@ -121,32 +78,11 @@ def _list_active_since(
                 pass
     return authors, newest
 
-
-def _next_link(link_header: str):
+def _next_link(link_header: str) -> Optional[str]:
     return next(
-        (
-            p[p.find("<") + 1 : p.find(">")]
-            for p in (link_header or "").split(",")
-            if 'rel="next"' in p
-        ),
+        (p[p.find("<") + 1 : p.find(">")] for p in (link_header or "").split(",") if 'rel="next"' in p),
         None,
     )
-
-
-def _contributors_score(n: int) -> float:
-    return 0.0 if n <= 0 else min(1.0, math.log1p(n) / math.log(6))
-
-
-def _freshness_score(latest: Optional[datetime]) -> float:
-    if not latest:
-        return 0.0
-    days = max(0, min(LOOKBACK_DAYS, (datetime.now(timezone.utc) - latest).days))
-    return 1.0 - (days / LOOKBACK_DAYS)
-
-
-def _combine(c: float, f: float) -> float:
-    return max(0.0, min(1.0, 0.7 * c + 0.3 * f))
-
 
 def _find_github_url_from_card_md(repo_id: str) -> Optional[str]:
     """Read the HF model card markdown and extract the first GitHub link."""
@@ -225,14 +161,7 @@ def _list_commits(
 
         # follow Link: rel="next"
         link = res.headers.get("Link", "")
-        nxt = next(
-            (
-                p[p.find("<") + 1 : p.find(">")]
-                for p in link.split(",")
-                if 'rel="next"' in p
-            ),
-            None,
-        )
+        next = _next_link(link)
         if not nxt:
             break
         url, params = nxt, {}
@@ -314,29 +243,19 @@ def _count_lifetime_contributors(o: str, r: str, pages: int = 10) -> int:
     params = {"per_page": "100", "anon": "1"}
     total = 0
     for _ in range(pages):
-        try:
-            res = requests.get(url, headers=_gh_headers(), params=params, timeout=10)
-        except requests.RequestException:
-            break
-        if res.status_code != 200:
+        res = _gh_get(url, params=params, timeout=10)
+        if res is None:
             break
         items = res.json()
         if not isinstance(items, list) or not items:
             break
         total += len(items)
-        link = res.headers.get("Link", "")
-        nxt = next(
-            (
-                p[p.find("<") + 1 : p.find(">")]
-                for p in link.split(",")
-                if 'rel="next"' in p
-            ),
-            None,
-        )
+        nxt = _next_link(res.headers.get("Link", ""))
         if not nxt:
             break
         url, params = nxt, {}
     return total
+
 
 
 def _score_from_stats(

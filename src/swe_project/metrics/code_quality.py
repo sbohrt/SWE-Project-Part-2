@@ -1,90 +1,102 @@
 from __future__ import annotations
 
 import logging
+import os
+import re
 import time
-from typing import Any, Set
+from typing import Any, Dict, Optional
 
-from swe_project.core.gh_utils import (  # noqa: F401
-    get_github_repo_files as get_github_repo_files,
-)
+import requests
 
-# Re-export these so tests can patch them on this module:
-from swe_project.core.hf_client import model_info as model_info  # noqa: F401
+from swe_project.core.hf_client import model_info
 from swe_project.core.model_url import to_repo_id
 from swe_project.metrics.base import MetricResult, register
+from swe_project.core.gh_utils import get_github_repo_files
+
 
 NAME, FIELD = "code_quality", "code_quality"
 
 
-def _filenames_for(url: str) -> Set[str]:
-    """Tiny local wrapper so tests can patch model_info/get_github_repo_files and affect behavior."""
-    if "github.com" in url:
-        return set(get_github_repo_files(url))
-    rid, _ = to_repo_id(url)
-    info: Any = model_info(rid)
-    siblings = getattr(info, "siblings", []) or []
-    return {
-        getattr(s, "rfilename", "") for s in siblings if getattr(s, "rfilename", "")
-    }
-
-
-def _score_from_filenames(filenames: Set[str], is_github: bool) -> float:
+def _score_single_url(analysis_url: str) -> float:
     score = 0.0
-    total = len(filenames)
-    if total == 0:
+    try:
+        filenames = set()
+        is_github = "github.com" in analysis_url
+
+        if is_github:
+            filenames = get_github_repo_files(analysis_url)
+        else:
+            rid, _ = to_repo_id(analysis_url)
+            info: Any = model_info(rid)
+            siblings = getattr(info, "siblings", [])
+            filenames = {s.rfilename for s in siblings}
+
+        total_files = len(filenames)
+
+        if total_files > 0:
+            if is_github:
+                if "requirements.txt" in filenames:
+                    score += 0.5
+                py_files_count = sum(1 for f in filenames if f.endswith(".py"))
+                if py_files_count > 0:
+                    score += (py_files_count / total_files) * 0.5
+            else:
+                py_files_count = sum(1 for f in filenames if f.endswith(".py"))
+                has_deps = (
+                    "requirements.txt" in filenames
+                    or "pyproject.toml" in filenames
+                    or "config.json" in filenames
+                )
+                if py_files_count > 0:
+                    if has_deps:
+                        score += 0.3
+                    score += (py_files_count / total_files) * 0.7
+                elif has_deps:
+                    score = 0.3
+
+    except Exception:
+        logging.exception("Sub-computation failed for %s", analysis_url)
         return 0.0
-    py_count = sum(1 for f in filenames if str(f).endswith(".py"))
-    has_deps = any(
-        n in filenames for n in ("requirements.txt", "pyproject.toml", "config.json")
-    )
 
-    if is_github:
-        if "requirements.txt" in filenames:
-            score += 0.5
-        if py_count > 0:
-            score += (py_count / total) * 0.5
-    else:
-        if py_count > 0:
-            if has_deps:
-                score += 0.3
-            score += (py_count / total) * 0.7
-        elif has_deps:
-            score = 0.3
-
-    return max(0.0, min(1.0, score))
+    return score
 
 
 def compute(input_line: str) -> MetricResult:
     t0 = time.perf_counter()
-    try:
-        urls = [u.strip() for u in input_line.split(",") if u.strip()]
-        targets = [
-            u
-            for u in urls
-            if ("github.com" in u) or ("huggingface.co" in u and "/datasets/" not in u)
-        ]
-        if not targets:
-            return {
-                "value": 0.0,
-                "latency_ms": int(round((time.perf_counter() - t0) * 1000)),
-            }
+    total_score = 0.0
+    urls = [url.strip() for url in input_line.split(",") if url.strip()]
 
-        total = 0.0
-        for url in targets:
-            filenames = _filenames_for(url)
-            total += _score_from_filenames(filenames, is_github=("github.com" in url))
+    relevant_urls = [
+        url
+        for url in urls
+        if "github.com" in url or ("huggingface.co" in url and "/datasets/" not in url)
+    ]
 
-        final = max(0.0, min(1.0, total))
-        return {
-            "value": float(final),
-            "latency_ms": int(round((time.perf_counter() - t0) * 1000)),
-        }
-    except Exception:
-        logging.exception("code_quality failed for %r", input_line)
+    if not relevant_urls:
         return {
             "value": 0.0,
             "latency_ms": int(round((time.perf_counter() - t0) * 1000)),
         }
 
+    for url in relevant_urls:
+        total_score += _score_single_url(url)
+
+    final_score = max(0.0, min(1.0, total_score))
+    return {
+        "value": float(final_score),
+        "latency_ms": int(round((time.perf_counter() - t0) * 1000)),
+    }
+
 
 register(NAME, FIELD, compute)
+
+# if __name__ == "__main__":
+#     import sys
+#     import json
+
+#     if len(sys.argv) > 1:
+#         input_line = " ".join(sys.argv[1:])
+#         result = compute(input_line=input_line)
+#         print(json.dumps(result))
+#     else:
+#         print("Usage: python -m swe_project.metrics.code_quality <URL1, URL2, ...>", file=sys.stderr)
