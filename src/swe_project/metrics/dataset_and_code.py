@@ -12,7 +12,7 @@ from swe_project.core.hf_client import model_info
 from swe_project.core.model_url import to_repo_id
 from swe_project.metrics.base import MetricResult, register
 
-NAME, FIELD = "dataset_and_code_score", "dataset_and_code_score"
+NAME, FIELD = "dataset_and_code", "dataset_and_code"
 
 
 def _gh_headers() -> Dict[str, str]:
@@ -175,6 +175,6 @@ if __name__ == "__main__":
         print(json.dumps(result))
     else:
         print(
-            "Usage: python -m swe_project.metrics.dataset_and_code_score <URL1, URL2, ...>",
+            "Usage: python -m swe_project.metrics.dataset_and_code <URL1, URL2, ...>",
             file=sys.stderr,
         )
