@@ -8,7 +8,8 @@
        CORS(app)
        
        # Register blueprints
-       from .routes import crud, rate, ingest, download
+       from .routes import crud, rate, ingest, download, health
+       app.register_blueprint(health.bp, url_prefix='/api/v1')
        app.register_blueprint(crud.bp, url_prefix='/api/v1')
        app.register_blueprint(rate.bp, url_prefix='/api/v1')
        app.register_blueprint(ingest.bp, url_prefix='/api/v1')
