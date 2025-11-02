@@ -1,0 +1,107 @@
+# template.yaml
+# AWS Serverless Application Model (SAM) template for deploying the Model Rating API.
+# This template defines the Lambda function, API Gateway, DynamoDB table, and S3 bucket.
+
+# -----------------
+# MANDATORY HEADER
+# -----------------
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Serverless API for Model Rating (SWE Project Part 2), using FastAPI 
+  and Mangum on AWS Lambda.
+
+# -----------------
+# GLOBAL SETTINGS
+# -----------------
+# Sets default properties for all functions defined in this template.
+Globals:
+  Function:
+    Timeout: 15 # Set a reasonable timeout (15 seconds)
+    MemorySize: 512 # Adequate memory for Python apps with dependencies
+    Runtime: python3.10
+    
+# -----------------
+# RESOURCES
+# -----------------
+Resources:
+  ModelRatingAPI:
+    Type: AWS::Serverless::Function
+    Properties:
+      # Handler path: {directory.file_name.handler_object}
+      # This points to the 'handler' object in 'lambda/handler.py'
+      Handler: lambda.handler.handler
+      
+      # CodeUri points to the directory to be packaged and uploaded.
+      # '.' packages the entire SWE-Project-Part-2 folder (including src/ and lambda/).
+      CodeUri: . 
+      
+      # Define environment variables for the Lambda function
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref RatingTable
+          S3_BUCKET_NAME: !Ref RepositoryBucket
+
+      # Define permissions (IAM) needed by the Lambda function
+      Policies:
+        # Allows Lambda to perform CRUD operations on the DynamoDB table
+        - DynamoDBCrudPolicy:
+            TableName: !Ref RatingTable
+        # Allows Lambda to read/write to the S3 bucket for Ingest/Download operations
+        - S3ReadWritePolicy:
+            BucketName: !Ref RepositoryBucket
+        # Required for writing logs to CloudWatch (usually granted by default, but good practice)
+        - AWSLambdaBasicExecutionRole 
+
+      Events:
+        ApiGateway:
+          Type: Api
+          Properties:
+            # Catch-all route for the FastAPI router to handle all API traffic
+            Path: /{proxy+}
+            Method: ANY
+            # Link to the explicit API Gateway definition below
+            RestApiId: !Ref ApiGateway 
+
+  # DynamoDB Table definition (for model scores and metadata - per project plan)
+  RatingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: swe-project-model-ratings
+      AttributeDefinitions:
+        - AttributeName: modelId
+          AttributeType: S 
+      KeySchema:
+        - AttributeName: modelId
+          KeyType: HASH 
+      # Using provisioned capacity for simple setup, could use OnDemand later
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # S3 Bucket definition (for storing zipped models/repos - per project plan)
+  RepositoryBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Ensures a globally unique bucket name by appending the AWS Account ID
+      BucketName: swe-project-repository-${AWS::AccountId}
+
+  # Explicit API Gateway definition (allows global configuration)
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      # CORS configuration (Crucial for the React Web UI defined in your Milestone 5)
+      Cors:
+        AllowMethods: "'*'"
+        AllowHeaders: "'*'"
+        AllowOrigin: "'*'"
+        
+# -----------------
+# OUTPUTS
+# -----------------
+# Provides the URL of the deployed API after deployment is complete.
+Outputs:
+  ModelRatingApiUrl:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
