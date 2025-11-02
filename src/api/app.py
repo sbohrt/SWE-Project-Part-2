@@ -2,6 +2,8 @@ from flask import Flask
 
 from .routes.rate import rate_bp
 from .routes.crud import crud_bp
+from .routes.ingest import ingest_bp     
+from .routes.download import download_bp
 
 
 def create_app():
@@ -9,6 +11,8 @@ def create_app():
     app = Flask(__name__)
     app.register_blueprint(rate_bp)
     app.register_blueprint(crud_bp)
+    app.register_blueprint(ingest_bp)      # <-- add
+    app.register_blueprint(download_bp)    # <-- add
     return app
 
 
