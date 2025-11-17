@@ -34,6 +34,12 @@ from swe_project.core.url_ctx import set_context
 from swe_project.logger import setup_logging
 from swe_project.metrics.base import registered
 
+# ---------- IMPORTS ADDED FOR STEP 2 -------------
+from swe_project.core.hf_client import model_config
+from swe_project.lineage_graph.lineage_extract import extract_parent_models
+from swe_project.lineage_graph.lineage_store import put_edges, Edge
+# --------------------------------------------------
+
 
 def _load_metrics() -> None:
     """
@@ -99,7 +105,45 @@ def _in_venv() -> bool:
     """Detect if Python is running inside a virtual environment."""
     return getattr(sys, "base_prefix", sys.prefix) != sys.prefix
 
+# ------------- ADDED FOR STEP 2 ----------------
+def _normalize_model_id(repo_id: str) -> str:
+    """Internal ID format for models stored in the lineage graph."""
+    # repo_id is something like "google-bert/bert-base-uncased"
+    return f"hf:model/{repo_id}"
 
+
+def _collect_known_models(path: str) -> set[str]:
+    """
+    Read the CSV once to collect all model IDs in this scoring run.
+
+    This lets us enforce: lineage only includes models 'uploaded to the system'.
+    """
+    known: set[str] = set()
+    with open(path, "r", encoding="utf-8", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if not row:
+                continue
+            if row[0].strip().startswith("#"):
+                continue
+
+            cells = [c.strip() for c in row]
+            while len(cells) < 3:
+                cells.insert(0, "")
+
+            code_url, dataset_url, model_url = cells[-3], cells[-2], cells[-1]
+
+            if not model_url:
+                continue
+            if not is_hf_model_url(model_url):
+                continue
+
+            # reuse your existing helper to get repo_id
+            repo_id, _ = to_repo_id(model_url)
+            known.add(_normalize_model_id(repo_id))
+    return known
+
+# -----------------------------------------------
 def _iter_models_from_csv(path: str):
     """
     Read CSV rows of the form: code_url, dataset_url, model_url
@@ -167,11 +211,17 @@ def cmd_score(url_file: str) -> int:
         print(json.dumps({"event": "error", "error": str(e), "url_file": url_file}))
         return 1
 
+    # NEW: gather all models in this scoring run
+    known_models = _collect_known_models(url_file)   
+
     # fresh context per invocation
     clear_url_ctx()
     logging.info("Scoring URLs from %s ...", url_file)
 
     for u in _iter_models_from_csv(url_file):
+        # Determine HF repo_id for this model URL
+        repo_id, _ = to_repo_id(u)  # e.g. "google-bert/bert-base-uncased"
+        model_internal_id = _normalize_model_id(repo_id)
         # Build tasks from registry (each compute(model_url) -> {"value","latency_ms"})
         tasks = []
         for _, field, compute in registered():
@@ -216,8 +266,36 @@ def cmd_score(url_file: str) -> int:
         }
         net = float(combine(scalars))
 
-        repo_id, _ = to_repo_id(u)  # e.g. "google-bert/bert-base-uncased"
+        # --- Lineage graph population from config.json ---
+        try:
+            cfg = model_config(repo_id)  # download & parse config.json
+        except Exception as e:
+            logging.warning("Failed to fetch config for %s: %s", repo_id, e)
+            cfg = {}
+
+        parent_repo_ids = extract_parent_models(cfg)
+
+        # Only keep parents that are also in this scoring run (assignment requirement)
+        parent_ids = [
+            _normalize_model_id(p)
+            for p in parent_repo_ids
+            if _normalize_model_id(p) in known_models
+        ]
+
+        edges: list[Edge] = [
+            {"from_id": model_internal_id, "to_id": pid, "edge_type": "DERIVED_FROM"}
+            for pid in parent_ids
+        ]
+
+        # Store lineage edges in DynamoDB
+        try:
+            put_edges(edges)
+        except Exception as e:
+            logging.warning("Failed to store lineage edges for %s: %s", repo_id, e)
+        # --- end lineage block ---
+
         model_name = re.split(r"[\\/]", repo_id.rstrip("/\\"))[-1]
+
 
         payload = {
             "name": model_name,

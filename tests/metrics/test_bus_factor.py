@@ -5,7 +5,6 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-
 from swe_project.core.url_ctx import clear as clear_url_ctx
 from swe_project.core.url_ctx import set_context
 from swe_project.metrics import bus_factor as bf
