@@ -14,5 +14,6 @@
        app.register_blueprint(rate.bp, url_prefix='/api/v1')
        app.register_blueprint(ingest.bp, url_prefix='/api/v1')
        app.register_blueprint(download.bp, url_prefix='/api/v1')
+       app.register_blueprint(lineage.bp, url_prefix="/api/v1") 
        
        return app
