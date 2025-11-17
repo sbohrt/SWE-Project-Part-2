@@ -5,6 +5,12 @@ from typing import Any, Optional
 from huggingface_hub import HfApi, snapshot_download
 from tqdm.auto import tqdm  # needed to silence the progress bars
 
+# -------- CHANGES MADE FOR STEP 2 ---------
+import json
+import os
+from pathlib import Path
+# ------------------------------------------
+
 _api = HfApi()
 
 
@@ -48,3 +54,32 @@ def download_snapshot(repo_id: str, allow_patterns):
             tqdm_class=SilentTqdm,
         )
     )
+
+
+# ------------- ADDED FOR STEP 2 ---------------
+
+def model_config(repo_id: str, revision: Optional[str] = None) -> dict:
+    """
+    Download and parse config.json for a Hugging Face model repo.
+
+    Returns an empty dict if config.json is missing or invalid.
+    """
+    # Reuse snapshot_download so we don't duplicate logic
+    snapshot_dir = snapshot_download(
+        repo_id=repo_id,
+        revision=revision,
+        allow_patterns=["config.json"],
+        local_dir_use_symlinks=False,
+        tqdm_class=SilentTqdm,
+    )
+
+    config_path = Path(snapshot_dir) / "config.json"
+    if not config_path.exists():
+        return {}
+
+    try:
+        with config_path.open("r", encoding="utf-8") as f:
+            return json.load(f)
+    except json.JSONDecodeError:
+        # malformed config
+        return {}
