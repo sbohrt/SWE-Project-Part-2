@@ -1,25 +1,28 @@
 import React from 'react';
-import logo from './logo.svg';
-import './App.css';
+import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import Navigation from './components/Navigation';
+import Home from './pages/Home';
+import Models from './pages/Models';
+import Ingest from './pages/Ingest';
+import Health from './pages/Health';
+import Lineage from './pages/Lineage';
 
 function App() {
   return (
-    <div className="App">
-      <header className="App-header">
-        <img src={logo} className="App-logo" alt="logo" />
-        <p>
-          Edit <code>src/App.tsx</code> and save to reload.
-        </p>
-        <a
-          className="App-link"
-          href="https://reactjs.org"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Learn React
-        </a>
-      </header>
-    </div>
+    <Router>
+      <div className="min-h-screen bg-gray-100">
+        <Navigation />
+        <main>
+          <Routes>
+            <Route path="/" element={<Home />} />
+            <Route path="/models" element={<Models />} />
+            <Route path="/ingest" element={<Ingest />} />
+            <Route path="/health" element={<Health />} />
+            <Route path="/lineage" element={<Lineage />} />
+          </Routes>
+        </main>
+      </div>
+    </Router>
   );
 }
 
