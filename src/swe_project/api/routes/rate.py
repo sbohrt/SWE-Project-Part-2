@@ -8,6 +8,18 @@ from swe_project.core.url_ctx import set_context
 
 bp = Blueprint('rate', __name__)
 
+def _load_metrics():
+    """Lazy load metrics only when needed"""
+    from swe_project.metrics import bus_factor
+    from swe_project.metrics import code_quality
+    from swe_project.metrics import dataset_and_code
+    from swe_project.metrics import dataset_quality
+    from swe_project.metrics import license
+    from swe_project.metrics import performance_claims
+    from swe_project.metrics import ramp_up_time
+    from swe_project.metrics import size_score
+
+
 @bp.route('/rate', methods=['POST'])
 def rate_model():
     """Rate a model using Phase 1 metrics"""

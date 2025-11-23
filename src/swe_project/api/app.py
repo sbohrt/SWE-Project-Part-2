@@ -3,17 +3,6 @@ from flask import Flask
 from flask_cors import CORS
 import logging
 
-def _load_metrics():
-    """Import metric modules for registration"""
-    from swe_project.metrics import bus_factor
-    from swe_project.metrics import code_quality
-    from swe_project.metrics import dataset_and_code
-    from swe_project.metrics import dataset_quality
-    from swe_project.metrics import license
-    from swe_project.metrics import performance_claims
-    from swe_project.metrics import ramp_up_time
-    from swe_project.metrics import size_score
-
 def create_app():
     app = Flask(__name__)
 
