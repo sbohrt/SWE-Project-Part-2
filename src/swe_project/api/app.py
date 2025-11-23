@@ -4,8 +4,16 @@
    import logging
    
    def create_app():
-       app = Flask(__name__)
-       CORS(app)
+   app = Flask(__name__)
+   
+    # Configure CORS to allow requests from React frontend
+    CORS(app, resources={
+        r"/api/*": {
+            "origins": ["http://localhost:3000"],
+            "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+            "allow_headers": ["Content-Type", "Authorization"]
+        }
+    })
        
        # Register blueprints
        from .routes import crud, rate, ingest, download, health
