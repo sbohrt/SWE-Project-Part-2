@@ -4,3 +4,5 @@ flake8
 isort
 black
 pytest
+jsonchema
+boto3

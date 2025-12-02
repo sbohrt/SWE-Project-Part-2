@@ -41,12 +41,15 @@ Resources:
         Variables:
           DYNAMODB_TABLE_NAME: !Ref RatingTable
           S3_BUCKET_NAME: !Ref RepositoryBucket
+          LINEAGE_TABLE_NAME: ModelLineage
 
-      # Define permissions (IAM) needed by the Lambda function
       Policies:
         # Allows Lambda to perform CRUD operations on the DynamoDB table
         - DynamoDBCrudPolicy:
             TableName: !Ref RatingTable
+        # Allows Lambda to READ from the lineage graph table
+        - DynamoDBReadPolicy:                    
+            TableName: ModelLineage
         # Allows Lambda to read/write to the S3 bucket for Ingest/Download operations
         - S3ReadWritePolicy:
             BucketName: !Ref RepositoryBucket
