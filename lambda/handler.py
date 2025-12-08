@@ -1,9 +1,13 @@
+# lambda/handler.py
 from src.swe_project.api.app import create_app
 from mangum import Mangum
+from asgiref.wsgi import WsgiToAsgi
 
-# Initialize the FastAPI application
-app = create_app()
+# Build the Flask (WSGI) app
+flask_app = create_app()
 
-# Initialize the Mangum handler, which translates API Gateway events
-# into ASGI (FastAPI) requests and responses.
-handler = Mangum(app)
+# Convert WSGI -> ASGI
+asgi_app = WsgiToAsgi(flask_app)
+
+# Mangum wraps the ASGI app for Lambda / API Gateway
+handler = Mangum(asgi_app)

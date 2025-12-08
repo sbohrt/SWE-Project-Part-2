@@ -1,72 +1,98 @@
-# src/api/routes/rate.py
+# src/swe_project/api/routes/rate.py
 from flask import Blueprint, request, jsonify
 import time
-from swe_project.core.exec_pool import run_parallel
-from swe_project.core.scoring import combine
-from swe_project.metrics.base import registered
-from swe_project.core.url_ctx import set_context
 
-bp = Blueprint('rate', __name__)
+from core.exec_pool import run_parallel
+from core.scoring import combine
+from metrics.base import registered
+from core.url_ctx import set_context
+
+bp = Blueprint("rate", __name__)
+
 
 def _load_metrics():
-    """Lazy load metrics only when needed"""
-    from swe_project.metrics import bus_factor
-    from swe_project.metrics import code_quality
-    from swe_project.metrics import dataset_and_code
-    from swe_project.metrics import dataset_quality
-    from swe_project.metrics import license
-    from swe_project.metrics import performance_claims
-    from swe_project.metrics import ramp_up_time
-    from swe_project.metrics import size_score
+    """Lazy load metrics only when needed so registration runs."""
+    from metrics import bus_factor
+    from metrics import code_quality
+    from metrics import dataset_and_code
+    from metrics import dataset_quality
+    from metrics import license as license_
+    from metrics import performance_claims
+    from metrics import ramp_up_time
+    from metrics import size_score
+
+    _ = [
+        bus_factor,
+        code_quality,
+        dataset_and_code,
+        dataset_quality,
+        license_,
+        performance_claims,
+        ramp_up_time,
+        size_score,
+    ]
+    return registered()
 
 
-@bp.route('/rate', methods=['POST'])
-def rate_model():
-    """Rate a model using Phase 1 metrics"""
-    data = request.get_json()
-    model_url = data.get('url')
-    
-    if not model_url:
-        return jsonify({'error': 'Missing required field: url'}), 400
-    
-    # Set context (code_url and dataset_url optional)
-    code_url = data.get('code_url')
-    dataset_url = data.get('dataset_url')
-    set_context(model_url, code_url, dataset_url)
-    
-    # Build tasks from metrics registry
-    tasks = []
-    for _, field, compute in registered():
-        def _task(func=compute, model=model_url):
-            def run():
-                return func(model)
-            return run
-        tasks.append((field, _task()))
-    
-    # Run metrics in parallel
-    t0 = time.perf_counter()
-    results = run_parallel(tasks, timeout_s=90)
-    net_latency_ms = int((time.perf_counter() - t0) * 1000)
-    
-    # Extract values and compute net score
-    def _val(name: str) -> float:
-        return float(results.get(name, {}).get('value', 0.0))
-    
+
+@bp.route("/rate", methods=["POST"])
+def rate():
+    """Rate a model by URL, returning net score + per-metric scores."""
+    body = request.get_json(silent=True) or {}
+
+    url = body.get("url") or body.get("model_url")
+    code_url = body.get("code_url")
+    dataset_url = body.get("dataset_url")
+
+    if not url or not isinstance(url, str):
+        return jsonify({"error": "bad_request", "message": "Missing 'url'"}), 400
+
+    metrics = _load_metrics()
+
+    # Build jobs: one job per metric
+    def make_job(metric_cls):
+        def job():
+            with set_context(url=url, code_url=code_url, dataset_url=dataset_url):
+                t0 = time.time()
+                value = metric_cls().compute()
+                latency_ms = (time.time() - t0) * 1000.0
+                return metric_cls.key, {"value": value, "latency_ms": latency_ms}
+
+        return job
+
+    jobs = [make_job(m) for m in metrics]
+
+    t0_all = time.time()
+    results_list = run_parallel(jobs)
+    net_latency_ms = (time.time() - t0_all) * 1000.0
+
+    results = {k: v for (k, v) in results_list}
+
+    def _val(key, default=None):
+        info = results.get(key) or {}
+        return info.get("value", default)
+
     scalars = {
-        'ramp_up_time': _val('ramp_up_time'),
-        'bus_factor': _val('bus_factor'),
-        'license': _val('license'),
-        'dataset_and_code_score': _val('dataset_and_code_score'),
-        'dataset_quality': _val('dataset_quality'),
-        'code_quality': _val('code_quality'),
-        'performance_claims': _val('performance_claims'),
-        'size_score': _val('size_score'),
+        "bus_factor": _val("bus_factor"),
+        "ramp_up": _val("ramp_up"),
+        "responsiveness": _val("responsiveness"),
+        "license": _val("license"),
+        "dataset_and_code_score": _val("dataset_and_code_score"),
+        "dataset_quality": _val("dataset_quality"),
+        "code_quality": _val("code_quality"),
+        "performance_claims": _val("performance_claims"),
+        "size_score": _val("size_score"),
     }
-    
+
     net_score = combine(scalars)
-    
-    return jsonify({
-        'net_score': net_score,
-        'net_score_latency': net_latency_ms,
-        'metrics': results
-    }), 200
+
+    return (
+        jsonify(
+            {
+                "net_score": net_score,
+                "net_score_latency": net_latency_ms,
+                "metrics": results,
+            }
+        ),
+        200,
+    )
