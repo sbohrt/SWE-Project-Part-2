@@ -1,7 +1,6 @@
 """
 Ensure every metric module under swe_project.metrics self-registers.
 """
-
 from __future__ import annotations
 
 import importlib

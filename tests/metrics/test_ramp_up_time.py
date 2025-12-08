@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from pathlib import Path
 
-# import the module so we can monkeypatch its *local* imports
-from swe_project.metrics import ramp_up_time as rt
+from swe_project.metrics import (
+    ramp_up_time as rt,  # import the module so we can monkeypatch its *local* imports
+)
 
 
 def _write_readme(dirpath: Path, text: str = "# Title\n\nHello"):

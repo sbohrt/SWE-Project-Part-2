@@ -1,0 +1,146 @@
+# template.yaml
+# AWS Serverless Application Model (SAM) template for deploying the Model Rating API.
+# This template defines the Lambda function, API Gateway, DynamoDB table, and S3 bucket.
+
+# -----------------
+# MANDATORY HEADER
+# -----------------
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  Serverless API for Model Rating (SWE Project Part 2), using FastAPI 
+  and Mangum on AWS Lambda.
+
+# -----------------
+# GLOBAL SETTINGS
+# -----------------
+# Sets default properties for all functions defined in this template.
+Globals:
+  Function:
+    Timeout: 15 # Set a reasonable timeout (15 seconds)
+    MemorySize: 512 # Adequate memory for Python apps with dependencies
+    Runtime: python3.10
+    
+# -----------------
+# RESOURCES
+# -----------------
+Resources:
+  ModelRatingAPI:
+    Type: AWS::Serverless::Function
+    Properties:
+      # Handler path: {directory.file_name.handler_object}
+      # This points to the 'handler' object in 'lambda/handler.py'
+      Handler: lambda.handler.handler
+      
+      # CodeUri points to the directory to be packaged and uploaded.
+      # '.' packages the entire SWE-Project-Part-2 folder (including src/ and lambda/).
+      CodeUri: . 
+      
+      # Define environment variables for the Lambda function
+      Environment:
+        Variables:
+          DYNAMODB_TABLE_NAME: !Ref RatingTable
+          S3_BUCKET_NAME: !Ref RepositoryBucket
+          LINEAGE_TABLE_NAME: ModelLineage
+          # SECURITY FIX: Add admin API key for protected endpoints
+          # TODO: Replace with secure value from AWS Secrets Manager or Parameter Store
+          ADMIN_API_KEY: "CHANGE-ME-IN-PRODUCTION"
+          # SECURITY FIX: Restrict CORS to specific origins
+          ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5000"
+
+      Policies:
+        # SECURITY FIX: Replaced overly-permissive managed policies with least-privilege inline policies
+        # Basic Lambda execution role for CloudWatch Logs
+        - AWSLambdaBasicExecutionRole
+        # Inline policy for DynamoDB access (restricted to specific tables)
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                # Only allow access to the specific RatingTable
+                - !GetAtt RatingTable.Arn
+                # Only allow READ access to the LineageTable
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ModelLineage"
+        # Inline policy for S3 access (restricted to specific bucket)
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+                - s3:ListBucket
+              Resource:
+                # Only allow access to the specific RepositoryBucket
+                - !GetAtt RepositoryBucket.Arn
+                - !Sub "${RepositoryBucket.Arn}/*" 
+
+      Events:
+        ApiGateway:
+          Type: Api
+          Properties:
+            # Catch-all route for the FastAPI router to handle all API traffic
+            Path: /{proxy+}
+            Method: ANY
+            # Link to the explicit API Gateway definition below
+            RestApiId: !Ref ApiGateway 
+
+  # DynamoDB Table definition (for model scores and metadata - per project plan)
+  RatingTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: swe-project-model-ratings
+      AttributeDefinitions:
+        - AttributeName: modelId
+          AttributeType: S 
+      KeySchema:
+        - AttributeName: modelId
+          KeyType: HASH 
+      # Using provisioned capacity for simple setup, could use OnDemand later
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+
+  # S3 Bucket definition (for storing zipped models/repos - per project plan)
+  RepositoryBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      # Ensures a globally unique bucket name by appending the AWS Account ID
+      BucketName: swe-project-repository-${AWS::AccountId}
+
+  # Explicit API Gateway definition (allows global configuration)
+  ApiGateway:
+    Type: AWS::Serverless::Api
+    Properties:
+      StageName: Prod
+      # SECURITY FIX: Restrict CORS to specific origins instead of wildcard
+      # Note: For production, replace with actual frontend domain
+      Cors:
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-API-Key,Authorization'"
+        # Restrict to localhost for development
+        # TODO: Update with production frontend URL
+        AllowOrigin: "'http://localhost:3000'"
+        AllowCredentials: true
+        
+# -----------------
+# OUTPUTS
+# -----------------
+# Provides the URL of the deployed API after deployment is complete.
+Outputs:
+  ModelRatingApiUrl:
+    Description: "API Gateway endpoint URL for Prod stage"
+    Value: !Sub "https://${ApiGateway}.execute-api.${AWS::Region}.amazonaws.com/Prod/"
