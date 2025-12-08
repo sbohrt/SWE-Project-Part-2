@@ -16,23 +16,23 @@ def _load_metrics():
     from metrics import code_quality
     from metrics import dataset_and_code
     from metrics import dataset_quality
-    from metrics import license_check
-    from metrics import performance
-    from metrics import rampup
-    from metrics import size
+    from metrics import license as license_
+    from metrics import performance_claims
+    from metrics import ramp_up_time
+    from metrics import size_score
 
-    # Touch modules so their @register decorators run.
     _ = [
         bus_factor,
         code_quality,
         dataset_and_code,
         dataset_quality,
-        license_check,
-        performance,
-        rampup,
-        size,
+        license_,
+        performance_claims,
+        ramp_up_time,
+        size_score,
     ]
     return registered()
+
 
 
 @bp.route("/rate", methods=["POST"])
