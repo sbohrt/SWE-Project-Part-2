@@ -1,98 +1,66 @@
 # src/swe_project/api/routes/rate.py
-from flask import Blueprint, request, jsonify
-import time
+"""
+Rate endpoint for scoring models.
 
-from core.exec_pool import run_parallel
-from core.scoring import combine
-from metrics.base import registered
-from core.url_ctx import set_context
+SECURITY FIX: Added URL validation to prevent SSRF attacks.
+"""
+from flask import Blueprint, request, jsonify
+
+from swe_project.api.validators import validate_model_url
+from cli import score_single_model
 
 bp = Blueprint("rate", __name__)
 
 
-def _load_metrics():
-    """Lazy load metrics only when needed so registration runs."""
-    from metrics import bus_factor
-    from metrics import code_quality
-    from metrics import dataset_and_code
-    from metrics import dataset_quality
-    from metrics import license as license_
-    from metrics import performance_claims
-    from metrics import ramp_up_time
-    from metrics import size_score
-
-    _ = [
-        bus_factor,
-        code_quality,
-        dataset_and_code,
-        dataset_quality,
-        license_,
-        performance_claims,
-        ramp_up_time,
-        size_score,
-    ]
-    return registered()
-
-
-
 @bp.route("/rate", methods=["POST"])
 def rate():
-    """Rate a model by URL, returning net score + per-metric scores."""
-    body = request.get_json(silent=True) or {}
+    """
+    POST /api/v1/rate
 
-    url = body.get("url") or body.get("model_url")
-    code_url = body.get("code_url")
-    dataset_url = body.get("dataset_url")
+    Score a model from a given URL.
 
-    if not url or not isinstance(url, str):
-        return jsonify({"error": "bad_request", "message": "Missing 'url'"}), 400
+    Request body:
+        {
+            "url": "https://huggingface.co/model-name"
+        }
 
-    metrics = _load_metrics()
+    Returns:
+        200: Model score data
+        400: Invalid input or scoring error
+    """
+    # Use silent=True to prevent Flask from raising exceptions on malformed JSON
+    data = request.get_json(silent=True)
 
-    # Build jobs: one job per metric
-    def make_job(metric_cls):
-        def job():
-            with set_context(url=url, code_url=code_url, dataset_url=dataset_url):
-                t0 = time.time()
-                value = metric_cls().compute()
-                latency_ms = (time.time() - t0) * 1000.0
-                return metric_cls.key, {"value": value, "latency_ms": latency_ms}
+    # Check if JSON parsing failed (returns None for malformed JSON)
+    if data is None:
+        return jsonify({
+            'error': 'BadRequest',
+            'message': 'Request body must be valid JSON'
+        }), 400
 
-        return job
+    url = data.get('url')
 
-    jobs = [make_job(m) for m in metrics]
+    if not url:
+        return jsonify({
+            'error': 'BadRequest',
+            'message': 'Missing required field: url'
+        }), 400
 
-    t0_all = time.time()
-    results_list = run_parallel(jobs)
-    net_latency_ms = (time.time() - t0_all) * 1000.0
+    # SECURITY FIX: Validate URL to prevent SSRF attacks
+    is_valid, error_msg = validate_model_url(url)
+    if not is_valid:
+        return jsonify({
+            'error': 'BadRequest',
+            'message': f'Invalid URL: {error_msg}'
+        }), 400
 
-    results = {k: v for (k, v) in results_list}
+    # Score the model using Phase 1 logic
+    try:
+        result = score_single_model(url)
+        return jsonify(result), 200
 
-    def _val(key, default=None):
-        info = results.get(key) or {}
-        return info.get("value", default)
-
-    scalars = {
-        "bus_factor": _val("bus_factor"),
-        "ramp_up": _val("ramp_up"),
-        "responsiveness": _val("responsiveness"),
-        "license": _val("license"),
-        "dataset_and_code_score": _val("dataset_and_code_score"),
-        "dataset_quality": _val("dataset_quality"),
-        "code_quality": _val("code_quality"),
-        "performance_claims": _val("performance_claims"),
-        "size_score": _val("size_score"),
-    }
-
-    net_score = combine(scalars)
-
-    return (
-        jsonify(
-            {
-                "net_score": net_score,
-                "net_score_latency": net_latency_ms,
-                "metrics": results,
-            }
-        ),
-        200,
-    )
+    except Exception as e:
+        return jsonify({
+            'error': 'InternalError',
+            'message': f'Failed to score model: {str(e)}'
+        }), 500

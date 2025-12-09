@@ -42,19 +42,51 @@ Resources:
           DYNAMODB_TABLE_NAME: !Ref RatingTable
           S3_BUCKET_NAME: !Ref RepositoryBucket
           LINEAGE_TABLE_NAME: ModelLineage
+          # SECURITY FIX: Add admin API key for protected endpoints
+          # TODO: Replace with secure value from AWS Secrets Manager or Parameter Store
+          ADMIN_API_KEY: "CHANGE-ME-IN-PRODUCTION"
+          # SECURITY FIX: Restrict CORS to specific origins
+          ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5000"
 
       Policies:
-        # Allows Lambda to perform CRUD operations on the DynamoDB table
-        - DynamoDBCrudPolicy:
-            TableName: !Ref RatingTable
-        # Allows Lambda to READ from the lineage graph table
-        - DynamoDBReadPolicy:                    
-            TableName: ModelLineage
-        # Allows Lambda to read/write to the S3 bucket for Ingest/Download operations
-        - S3ReadWritePolicy:
-            BucketName: !Ref RepositoryBucket
-        # Required for writing logs to CloudWatch (usually granted by default, but good practice)
-        - AWSLambdaBasicExecutionRole 
+        # SECURITY FIX: Replaced overly-permissive managed policies with least-privilege inline policies
+        # Basic Lambda execution role for CloudWatch Logs
+        - AWSLambdaBasicExecutionRole
+        # Inline policy for DynamoDB access (restricted to specific tables)
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:PutItem
+                - dynamodb:UpdateItem
+                - dynamodb:DeleteItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                # Only allow access to the specific RatingTable
+                - !GetAtt RatingTable.Arn
+                # Only allow READ access to the LineageTable
+            - Effect: Allow
+              Action:
+                - dynamodb:GetItem
+                - dynamodb:Query
+                - dynamodb:Scan
+              Resource:
+                - !Sub "arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ModelLineage"
+        # Inline policy for S3 access (restricted to specific bucket)
+        - Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - s3:GetObject
+                - s3:PutObject
+                - s3:DeleteObject
+                - s3:ListBucket
+              Resource:
+                # Only allow access to the specific RepositoryBucket
+                - !GetAtt RepositoryBucket.Arn
+                - !Sub "${RepositoryBucket.Arn}/*" 
 
       Events:
         ApiGateway:
@@ -94,11 +126,15 @@ Resources:
     Type: AWS::Serverless::Api
     Properties:
       StageName: Prod
-      # CORS configuration (Crucial for the React Web UI defined in your Milestone 5)
+      # SECURITY FIX: Restrict CORS to specific origins instead of wildcard
+      # Note: For production, replace with actual frontend domain
       Cors:
-        AllowMethods: "'*'"
-        AllowHeaders: "'*'"
-        AllowOrigin: "'*'"
+        AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
+        AllowHeaders: "'Content-Type,X-API-Key,Authorization'"
+        # Restrict to localhost for development
+        # TODO: Update with production frontend URL
+        AllowOrigin: "'http://localhost:3000'"
+        AllowCredentials: true
         
 # -----------------
 # OUTPUTS

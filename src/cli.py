@@ -25,17 +25,17 @@ from pathlib import Path
 from typing import List, Tuple
 
 # Ensure metric modules auto-register via package import side-effects.
-from swe_project import metrics  # noqa: F401
-from swe_project.core.exec_pool import run_parallel
-from swe_project.core.model_url import is_hf_model_url, to_repo_id
-from swe_project.core.scoring import combine
-from swe_project.core.url_ctx import clear as clear_url_ctx
-from swe_project.core.url_ctx import set_context
-from swe_project.logger import setup_logging
-from swe_project.metrics.base import registered
+import metrics  # noqa: F401
+from core.exec_pool import run_parallel
+from core.model_url import is_hf_model_url, to_repo_id
+from core.scoring import combine
+from core.url_ctx import clear as clear_url_ctx
+from core.url_ctx import set_context
+from logger import setup_logging
+from metrics.base import registered
 
 # ---------- IMPORTS ADDED FOR STEP 2 -------------
-from swe_project.core.hf_client import model_config
+from core.hf_client import model_config
 from swe_project.lineage_graph.lineage_extract import extract_parent_models
 from swe_project.lineage_graph.lineage_store import put_edges, Edge
 # --------------------------------------------------
@@ -47,14 +47,14 @@ def _load_metrics() -> None:
     Called only by `cmd_score` so `install`/`test` don't require optional deps yet.
     """
     # Import inside function to avoid ImportError before `install` runs.
-    from swe_project.metrics import bus_factor  # noqa: F401
-    from swe_project.metrics import code_quality  # noqa: F401
-    from swe_project.metrics import dataset_and_code  # noqa: F401
-    from swe_project.metrics import dataset_quality  # noqa: F401
-    from swe_project.metrics import license  # noqa: F401
-    from swe_project.metrics import performance_claims  # noqa: F401
-    from swe_project.metrics import ramp_up_time  # noqa: F401
-    from swe_project.metrics import size_score  # noqa: F401
+    from metrics import bus_factor  # noqa: F401
+    from metrics import code_quality  # noqa: F401
+    from metrics import dataset_and_code  # noqa: F401
+    from metrics import dataset_quality  # noqa: F401
+    from metrics import license  # noqa: F401
+    from metrics import performance_claims  # noqa: F401
+    from metrics import ramp_up_time  # noqa: F401
+    from metrics import size_score  # noqa: F401
 
 
 # ---------- helpers ----------
@@ -195,6 +195,97 @@ def cmd_install() -> int:
     print((err or out) or "Installation failed.", file=sys.stderr)
     logging.error("Installation failed: %s", (err or out))
     return 1
+
+
+def score_single_model(model_url: str) -> dict:
+    """
+    Score a single model URL and return the results as a dictionary.
+
+    This function is designed for API use. It scores a single model
+    and returns the results in a structured format.
+
+    Args:
+        model_url: The Hugging Face or GitHub model URL to score
+
+    Returns:
+        dict: Scoring results with all metrics and latencies
+
+    Raises:
+        Exception: If scoring fails
+    """
+    _load_metrics()
+    clear_url_ctx()
+
+    # Determine HF repo_id for this model URL
+    repo_id, _ = to_repo_id(model_url)
+    model_internal_id = _normalize_model_id(repo_id)
+
+    # Build tasks from registry
+    tasks = []
+    for _, field, compute in registered():
+        def _task(func=compute, model=model_url):
+            def run():
+                return func(model)
+            return run
+        tasks.append((field, _task()))
+
+    # Run metrics in parallel
+    t0 = time.perf_counter()
+    results = run_parallel(tasks, timeout_s=90)
+    net_latency_ms = int((time.perf_counter() - t0) * 1000)
+
+    # Helper functions
+    def _val(name: str) -> float:
+        return float(results.get(name, {}).get("value", 0.0))
+
+    def _lat(name: str) -> int:
+        return int(results.get(name, {}).get("latency_ms", 0))
+
+    # Process size_score
+    size_map = results.get("size_score", {}).get("value", {}) or {}
+    for k in ("raspberry_pi", "jetson_nano", "desktop_pc", "aws_server"):
+        size_map.setdefault(k, 0.0)
+    size_lat = _lat("size_score")
+
+    # Gather scalar metrics
+    scalars = {
+        "ramp_up_time": _val("ramp_up_time"),
+        "bus_factor": _val("bus_factor"),
+        "license": _val("license"),
+        "dataset_and_code_score": _val("dataset_and_code_score"),
+        "dataset_quality": _val("dataset_quality"),
+        "code_quality": _val("code_quality"),
+        "performance_claims": _val("performance_claims"),
+        "size_score": (sum(size_map.values()) / 4.0),
+    }
+    net = float(combine(scalars))
+
+    model_name = re.split(r"[\\/]", repo_id.rstrip("/\\"))[-1]
+
+    # Return structured results
+    return {
+        "url": model_url,
+        "name": model_name,
+        "category": "MODEL",
+        "net_score": round(net, 3),
+        "net_score_latency": net_latency_ms,
+        "ramp_up_time": scalars["ramp_up_time"],
+        "ramp_up_time_latency": _lat("ramp_up_time"),
+        "bus_factor": scalars["bus_factor"],
+        "bus_factor_latency": _lat("bus_factor"),
+        "performance_claims": scalars["performance_claims"],
+        "performance_claims_latency": _lat("performance_claims"),
+        "license": scalars["license"],
+        "license_latency": _lat("license"),
+        "size_score": size_map,
+        "size_score_latency": size_lat,
+        "dataset_and_code_score": scalars["dataset_and_code_score"],
+        "dataset_and_code_score_latency": _lat("dataset_and_code_score"),
+        "dataset_quality": scalars["dataset_quality"],
+        "dataset_quality_latency": _lat("dataset_quality"),
+        "code_quality": scalars["code_quality"],
+        "code_quality_latency": _lat("code_quality"),
+    }
 
 
 def cmd_score(url_file: str) -> int:
