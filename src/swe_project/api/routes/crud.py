@@ -9,7 +9,7 @@ import os
 import boto3
 from flask import Blueprint, request, jsonify
 
-from swe_project.api.auth import require_api_key
+from src.swe_project.api.auth import require_api_key
 
 bp = Blueprint("crud", __name__)
 

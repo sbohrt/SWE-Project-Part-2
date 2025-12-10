@@ -1,5 +1,5 @@
 # run.py
-from swe_project.api.app import create_app
+from src.swe_project.api.app import create_app
 
 app = create_app()
 
