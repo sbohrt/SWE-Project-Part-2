@@ -5,17 +5,20 @@ Uses the RatingTable to persist artifacts across Lambda invocations.
 """
 from __future__ import annotations
 
+import logging
 import json
 import os
 import re
 import time
 import uuid
+import urllib.request
 from typing import Dict, List, Optional
 
 import boto3
 from botocore.exceptions import ClientError
 
 ArtifactRecord = Dict[str, object]
+logger = logging.getLogger(__name__)
 
 # Get table name from environment, with fallback
 TABLE_NAME = os.environ.get("DYNAMODB_TABLE_NAME", "RatingTable")
@@ -50,9 +53,79 @@ def _normalize_type(t: str) -> Optional[str]:
 
 
 def _infer_name_from_url(url: str) -> str:
-    # Take the last non-empty path segment as the name fallback
-    parts = [p for p in url.rstrip("/").split("/") if p]
-    return parts[-1] if parts else "artifact"
+    """
+    Infer an artifact name from its URL.
+
+    Important: HuggingFace URLs often include suffixes like /tree/main or /blob/<sha>.
+    We want the repository name, not "main".
+    """
+    if not isinstance(url, str) or not url:
+        return "artifact"
+
+    u = url.strip()
+    # Strip query/fragment
+    u = u.split("#", 1)[0].split("?", 1)[0]
+
+    # Normalize trailing slash
+    u = u.rstrip("/")
+
+    parts = [p for p in u.split("/") if p]
+    if not parts:
+        return "artifact"
+
+    # HuggingFace patterns:
+    # - https://huggingface.co/<org>/<repo>
+    # - https://huggingface.co/<org>/<repo>/tree/<rev>
+    # - https://huggingface.co/datasets/<org>/<repo>
+    # - https://huggingface.co/datasets/<org>/<repo>/tree/<rev>
+    if "huggingface.co" in u:
+        try:
+            idx = parts.index("huggingface.co")
+        except ValueError:
+            idx = -1
+
+        # remove scheme if present (parts includes "https:" etc), so fallback:
+        # if idx not found, just use the tail logic below.
+        if idx != -1 and idx + 1 < len(parts):
+            tail = parts[idx + 1 :]
+        else:
+            # e.g. parts might not include domain split cleanly; just use last segments.
+            tail = parts[-5:]
+
+        # datasets have leading "datasets"
+        if tail and tail[0] == "datasets":
+            tail = tail[1:]
+
+        # drop known suffix blocks like tree/<rev>, blob/<rev>, resolve/<rev>
+        if "tree" in tail:
+            t = tail.index("tree")
+            tail = tail[:t]
+        if "blob" in tail:
+            t = tail.index("blob")
+            tail = tail[:t]
+        if "resolve" in tail:
+            t = tail.index("resolve")
+            tail = tail[:t]
+
+        if tail:
+            return tail[-1]
+
+    # GitHub patterns:
+    # - https://github.com/<org>/<repo>
+    # - https://github.com/<org>/<repo>/tree/<branch>/...
+    if "github.com" in u:
+        try:
+            idx = parts.index("github.com")
+        except ValueError:
+            idx = -1
+        if idx != -1 and idx + 2 < len(parts):
+            tail = parts[idx + 1 :]
+            # repo is second segment after org
+            if len(tail) >= 2:
+                return tail[1]
+
+    # Fallback: last segment
+    return parts[-1]
 
 
 def _artifact_to_dynamo(rec: ArtifactRecord) -> Dict:
@@ -64,6 +137,8 @@ def _artifact_to_dynamo(rec: ArtifactRecord) -> Dict:
         "artifact_name": rec["metadata"]["name"],
         "artifact_url": rec["data"]["url"],
         "download_url": rec["data"].get("download_url", ""),
+        # Optional, used for regex search; do not expose in API responses.
+        "artifact_readme": rec.get("_readme", ""),
         "created_at": rec.get("created_at", _now_ts()),
         "updated_at": rec.get("updated_at", _now_ts()),
         "record_type": "artifact",
@@ -95,7 +170,8 @@ class ArtifactStore:
             # Scan for all artifacts and delete them
             response = table.scan(
                 FilterExpression="record_type = :rt",
-                ExpressionAttributeValues={":rt": "artifact"}
+                ExpressionAttributeValues={":rt": "artifact"},
+                ConsistentRead=True
             )
             for item in response.get("Items", []):
                 table.delete_item(Key={"modelId": item["modelId"]})
@@ -104,7 +180,8 @@ class ArtifactStore:
                 response = table.scan(
                     FilterExpression="record_type = :rt",
                     ExpressionAttributeValues={":rt": "artifact"},
-                    ExclusiveStartKey=response["LastEvaluatedKey"]
+                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                    ConsistentRead=True
                 )
                 for item in response.get("Items", []):
                     table.delete_item(Key={"modelId": item["modelId"]})
@@ -119,26 +196,60 @@ class ArtifactStore:
             raise ValueError("invalid url")
 
         table = _get_table()
-        
-        # Check for duplicate (same type + url)
-        try:
-            response = table.scan(
-                FilterExpression="record_type = :rt AND artifact_type = :at AND artifact_url = :url",
-                ExpressionAttributeValues={
-                    ":rt": "artifact",
-                    ":at": atype,
-                    ":url": url,
-                }
-            )
-            if response.get("Items"):
-                raise FileExistsError("artifact exists")
-        except ClientError:
-            pass
 
         _id = _make_id()
         _name = name or _infer_name_from_url(url)
         now = _now_ts()
+        logger.info("AUTOGRADER_DEBUG STORE.create", extra={"artifact_type": atype, "url": url, "name": _name, "id": _id})
         
+        # Best-effort README capture for HF models/datasets and GitHub code (required for /artifact/byRegEx).
+        readme = ""
+        try:
+            if "huggingface.co" in url and atype in {"model", "dataset"}:
+                # Extract repo_id as "<org>/<repo>" (datasets also use that form after /datasets/)
+                u = url.strip().split("#", 1)[0].split("?", 1)[0].rstrip("/")
+                parts = [p for p in u.split("/") if p]
+                # find "huggingface.co" and take two segments after (skip "datasets" if present)
+                if "huggingface.co" in parts:
+                    idx = parts.index("huggingface.co")
+                    tail = parts[idx + 1 :]
+                    if tail and tail[0] == "datasets":
+                        tail = tail[1:]
+                    # drop /tree/<rev> etc
+                    if "tree" in tail:
+                        tail = tail[: tail.index("tree")]
+                    if len(tail) >= 2:
+                        repo_id = f"{tail[0]}/{tail[1]}"
+                        from src.core.hf_client import readme_text
+                        readme = readme_text(repo_id, repo_type=("dataset" if atype == "dataset" else "model"))
+            elif "github.com" in url and atype == "code":
+                u = url.strip().split("#", 1)[0].split("?", 1)[0].rstrip("/")
+                parts = [p for p in u.split("/") if p]
+                if "github.com" in parts:
+                    idx = parts.index("github.com")
+                    tail = parts[idx + 1 :]
+                    if len(tail) >= 2:
+                        org, repo = tail[0], tail[1]
+                        # Try common raw README locations
+                        candidates = [
+                            f"https://raw.githubusercontent.com/{org}/{repo}/main/README.md",
+                            f"https://raw.githubusercontent.com/{org}/{repo}/master/README.md",
+                            f"https://raw.githubusercontent.com/{org}/{repo}/main/readme.md",
+                            f"https://raw.githubusercontent.com/{org}/{repo}/master/readme.md",
+                        ]
+                        for ru in candidates:
+                            try:
+                                req = urllib.request.Request(ru, headers={"User-Agent": "ece461-autograder"})
+                                with urllib.request.urlopen(req, timeout=3) as resp:
+                                    data = resp.read(50_000)
+                                    readme = data.decode("utf-8", errors="ignore")
+                                    if readme:
+                                        break
+                            except Exception:
+                                continue
+        except Exception as e:
+            logger.info("AUTOGRADER_DEBUG STORE.create readme failed", extra={"url": url, "err": str(e)})
+
         record: ArtifactRecord = {
             "metadata": {"name": _name, "id": _id, "type": atype},
             "data": {
@@ -147,6 +258,7 @@ class ArtifactStore:
             },
             "created_at": now,
             "updated_at": now,
+            "_readme": readme,
         }
         
         # Store in DynamoDB
@@ -157,16 +269,39 @@ class ArtifactStore:
         table = _get_table()
         try:
             # Use strongly consistent read to avoid eventual consistency issues
+            logger.info("AUTOGRADER_DEBUG STORE.get", extra={"artifact_id": artifact_id, "pk": f"artifact#{artifact_id}"})
             response = table.get_item(
                 Key={"modelId": f"artifact#{artifact_id}"},
                 ConsistentRead=True
             )
             item = response.get("Item")
             if item and item.get("record_type") == "artifact":
+                logger.info("AUTOGRADER_DEBUG STORE.get hit", extra={"artifact_id": artifact_id, "artifact_type": item.get("artifact_type"), "artifact_name": item.get("artifact_name")})
                 return _dynamo_to_artifact(item)
         except ClientError:
             pass
+        logger.info("AUTOGRADER_DEBUG STORE.get miss", extra={"artifact_id": artifact_id})
         return None
+
+    def get_readme(self, artifact_id: str) -> str:
+        """
+        Fetch stored README text for an artifact (best-effort).
+
+        This is intentionally not included in the Artifact API response envelope,
+        but is used for regex search and rating heuristics.
+        """
+        table = _get_table()
+        try:
+            response = table.get_item(
+                Key={"modelId": f"artifact#{artifact_id}"},
+                ConsistentRead=True,
+            )
+            item = response.get("Item") or {}
+            if item.get("record_type") == "artifact":
+                return str(item.get("artifact_readme", "") or "")
+        except ClientError:
+            pass
+        return ""
 
     def update(self, artifact_type: str, artifact_id: str, artifact: ArtifactRecord) -> bool:
         atype = _normalize_type(artifact_type)
@@ -225,6 +360,7 @@ class ArtifactStore:
         table = _get_table()
         
         try:
+            logger.info("AUTOGRADER_DEBUG STORE.delete_by_id", extra={"artifact_id": artifact_id})
             table.delete_item(Key={"modelId": f"artifact#{artifact_id}"})
             return True
         except ClientError:
@@ -271,7 +407,8 @@ class ArtifactStore:
                 if not name or name == "*":
                     pass  # wildcard
                 else:
-                    if md.get("name") != name:
+                    # Be tolerant to casing differences from clients/grader.
+                    if str(md.get("name", "")).casefold() != str(name).casefold():
                         continue
                 if allowed_types:
                     if _normalize_type(md.get("type", "")) not in allowed_types:
@@ -290,19 +427,38 @@ class ArtifactStore:
         return out
 
     def list_by_name(self, name: str) -> List[ArtifactRecord]:
+        """
+        Return artifacts matching name.
+
+        We do a full scan + in-Python filtering to be case-insensitive and to
+        avoid DynamoDB expression edge cases.
+        """
         table = _get_table()
-        
         try:
             response = table.scan(
-                FilterExpression="record_type = :rt AND artifact_name = :name",
-                ExpressionAttributeValues={":rt": "artifact", ":name": name},
-                ConsistentRead=True
+                FilterExpression="record_type = :rt",
+                ExpressionAttributeValues={":rt": "artifact"},
+                ConsistentRead=True,
             )
             items = response.get("Items", [])
+            while "LastEvaluatedKey" in response:
+                response = table.scan(
+                    FilterExpression="record_type = :rt",
+                    ExpressionAttributeValues={":rt": "artifact"},
+                    ExclusiveStartKey=response["LastEvaluatedKey"],
+                    ConsistentRead=True,
+                )
+                items.extend(response.get("Items", []))
         except ClientError:
             items = []
-        
-        return [_dynamo_to_artifact(item) for item in items]
+
+        target = str(name).casefold()
+        out: List[ArtifactRecord] = []
+        for item in items:
+            rec = _dynamo_to_artifact(item)
+            if str(rec.get("metadata", {}).get("name", "")).casefold() == target:
+                out.append(rec)
+        return out
 
     def list_by_regex(self, pattern: str) -> List[ArtifactRecord]:
         regex = re.compile(pattern, re.IGNORECASE)
@@ -317,9 +473,16 @@ class ArtifactStore:
             items = response.get("Items", [])
         except ClientError:
             items = []
-        
-        records = [_dynamo_to_artifact(item) for item in items]
-        return [rec for rec in records if (regex.search(rec["metadata"].get("name", "")) or regex.search(rec["data"].get("url", "")))]
+
+        # Filter using name/url/readme without changing the external artifact schema.
+        matched: List[ArtifactRecord] = []
+        for item in items:
+            name = str(item.get("artifact_name", ""))
+            url = str(item.get("artifact_url", ""))
+            readme = str(item.get("artifact_readme", ""))
+            if regex.search(name) or regex.search(url) or regex.search(readme):
+                matched.append(_dynamo_to_artifact(item))
+        return matched
 
 
 STORE = ArtifactStore()

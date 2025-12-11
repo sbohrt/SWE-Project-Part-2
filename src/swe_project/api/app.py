@@ -11,6 +11,7 @@ from src.swe_project.api.routes.ingest import bp as ingest_bp
 from src.swe_project.api.routes.download import bp as download_bp
 from src.swe_project.api.routes.health import bp as health_bp
 from src.swe_project.api.routes.lineage import bp as lineage_bp
+from src.swe_project.api.routes.authenticate import bp as authenticate_bp
 from src.swe_project.api.routes.artifacts import artifacts_bp
 
 
@@ -37,6 +38,7 @@ def create_app():
     # Register baseline spec endpoints at root (no /api/v1 prefix)
     app.register_blueprint(artifacts_bp)
     # Note: artifacts_bp already has /health route
+    app.register_blueprint(authenticate_bp)
 
     @app.after_request
     def add_cors_headers(response):

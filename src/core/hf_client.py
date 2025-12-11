@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any, Optional
 
-from huggingface_hub import HfApi, snapshot_download
+from huggingface_hub import HfApi, snapshot_download, hf_hub_download
 from tqdm.auto import tqdm  # needed to silence the progress bars
 
 # -------- CHANGES MADE FOR STEP 2 ---------
@@ -83,3 +83,28 @@ def model_config(repo_id: str, revision: Optional[str] = None) -> dict:
     except json.JSONDecodeError:
         # malformed config
         return {}
+
+
+def readme_text(repo_id: str, repo_type: str = "model", revision: Optional[str] = None) -> str:
+    """
+    Fetch README text for a HuggingFace repo (model or dataset).
+
+    This is used to support /artifact/byRegEx which must search names AND READMEs.
+    We keep this best-effort: return "" if missing/unavailable.
+    """
+    # Try a few common filename casings
+    candidates = ["README.md", "readme.md", "README.MD", "README"]
+    for filename in candidates:
+        try:
+            path = hf_hub_download(
+                repo_id=repo_id,
+                filename=filename,
+                repo_type=repo_type,
+                revision=revision,
+            )
+            with open(path, "r", encoding="utf-8", errors="ignore") as f:
+                # limit size to keep DynamoDB item small-ish
+                return f.read(50_000)
+        except Exception:
+            continue
+    return ""
