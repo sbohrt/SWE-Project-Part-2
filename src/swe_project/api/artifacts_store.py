@@ -30,7 +30,15 @@ _dynamodb = None
 def _get_table():
     global _dynamodb
     if _dynamodb is None:
-        _dynamodb = boto3.resource("dynamodb")
+        # Support local DynamoDB for development
+        dynamodb_config = {}
+        endpoint_url = os.getenv("AWS_ENDPOINT_URL")
+        if endpoint_url:
+            dynamodb_config = {
+                "endpoint_url": endpoint_url,
+                "region_name": os.getenv("AWS_DEFAULT_REGION", "us-east-1")
+            }
+        _dynamodb = boto3.resource("dynamodb", **dynamodb_config)
     return _dynamodb.Table(TABLE_NAME)
 
 
