@@ -7,9 +7,9 @@ import time
 from typing import Any, Dict, Optional
 
 import requests
-from swe_project.core.hf_client import model_info
-from swe_project.core.model_url import to_repo_id
-from swe_project.metrics.base import MetricResult, register
+from core.hf_client import model_info
+from core.model_url import to_repo_id
+from metrics.base import MetricResult, register
 
 NAME, FIELD = "dataset_and_code", "dataset_and_code"
 

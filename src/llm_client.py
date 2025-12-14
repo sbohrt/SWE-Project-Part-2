@@ -8,8 +8,6 @@ from dotenv import load_dotenv
 load_dotenv()
 
 API_KEY = os.getenv("GEN_AI_STUDIO_API_KEY")
-if not API_KEY:
-    raise RuntimeError("Missing GEN_AI_STUDIO_API_KEY in .env")
 
 # base URL for purdue api
 BASE_URL = "https://genai.rcac.purdue.edu/api/chat/completions"
@@ -28,6 +26,8 @@ def ask_llm(
     Sends a list of messages [{role: "user"/"system", content: "..."}]
     and returns the model's text output as a string.
     """
+    if not API_KEY:
+        raise RuntimeError("Missing GEN_AI_STUDIO_API_KEY in .env")
 
     headers = {
         "Authorization": f"Bearer {API_KEY}",

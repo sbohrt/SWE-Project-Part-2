@@ -5,7 +5,7 @@ import os
 from flask import Flask
 from flask_cors import CORS
 
-from .routes import crud, rate, ingest, download, health, lineage
+from .routes import crud, rate, ingest, download, health, lineage, cost, license_check
 
 
 def create_app():
@@ -25,5 +25,7 @@ def create_app():
     app.register_blueprint(ingest.bp, url_prefix="/api/v1")
     app.register_blueprint(download.bp, url_prefix="/api/v1")
     app.register_blueprint(lineage.bp, url_prefix="/api/v1")
+    app.register_blueprint(cost.bp, url_prefix="/api/v1")
+    app.register_blueprint(license_check.bp, url_prefix="/api/v1")
 
     return app

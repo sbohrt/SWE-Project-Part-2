@@ -47,6 +47,7 @@ def _load_metrics() -> None:
     Called only by `cmd_score` so `install`/`test` don't require optional deps yet.
     """
     # Import inside function to avoid ImportError before `install` runs.
+    # Phase 1 metrics
     from metrics import bus_factor  # noqa: F401
     from metrics import code_quality  # noqa: F401
     from metrics import dataset_and_code  # noqa: F401
@@ -55,6 +56,11 @@ def _load_metrics() -> None:
     from metrics import performance_claims  # noqa: F401
     from metrics import ramp_up_time  # noqa: F401
     from metrics import size_score  # noqa: F401
+
+    # Phase 2 metrics
+    from metrics import reproducibility  # noqa: F401
+    from metrics import reviewedness  # noqa: F401
+    from metrics import tree_score  # noqa: F401
 
 
 # ---------- helpers ----------
@@ -285,6 +291,12 @@ def score_single_model(model_url: str) -> dict:
         "dataset_quality_latency": _lat("dataset_quality"),
         "code_quality": scalars["code_quality"],
         "code_quality_latency": _lat("code_quality"),
+        "reproducibility": _val("reproducibility"),
+        "reproducibility_latency": _lat("reproducibility"),
+        "reviewedness": _val("reviewedness"),
+        "reviewedness_latency": _lat("reviewedness"),
+        "tree_score": _val("tree_score"),
+        "tree_score_latency": _lat("tree_score"),
     }
 
 

@@ -14,9 +14,9 @@ except Exception:
     hf_hub_download = None  # type: ignore
     _HF_AVAILABLE = False
 
-from swe_project.core.hf_client import model_info
-from swe_project.core.model_url import to_repo_id
-from swe_project.metrics.base import MetricResult, register
+from core.hf_client import model_info
+from core.model_url import to_repo_id
+from metrics.base import MetricResult, register
 
 NAME, FIELD = "performance_claims", "performance_claims"
 
