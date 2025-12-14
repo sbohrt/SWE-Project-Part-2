@@ -30,7 +30,8 @@ const Models: React.FC = () => {
   }, []);
 
   const handleView = (id: string) => {
-    navigate(`/models/${id}`);
+    // Navigate to lineage page with the model ID as query param
+    navigate(`/lineage?artifactId=${id}`);
   };
 
   const handleDelete = async (id: string) => {

@@ -1,19 +1,18 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { modelService } from '../services/modelService';
 import { LineageNode } from '../types/model';
-import Loading from '../components/Loading';
 import ErrorMessage from '../components/ErrorMessage';
 
 const Lineage: React.FC = () => {
-  const [modelId, setModelId] = useState('');
+  const [searchParams] = useSearchParams();
+  const [modelId, setModelId] = useState(searchParams.get('artifactId') || '');
   const [lineage, setLineage] = useState<LineageNode | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const handleFetch = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    if (!modelId.trim()) {
+  const fetchLineage = async (id: string) => {
+    if (!id.trim()) {
       setError('Please enter a model ID');
       return;
     }
@@ -21,13 +20,27 @@ const Lineage: React.FC = () => {
     try {
       setLoading(true);
       setError(null);
-      const data = await modelService.getLineage(modelId);
+      const data = await modelService.getLineage(id);
       setLineage(data);
     } catch (err: any) {
-      setError(err.message || 'Failed to fetch lineage data');
+      setError(err.response?.data?.error || err.message || 'Failed to fetch lineage data');
     } finally {
       setLoading(false);
     }
+  };
+
+  // Auto-fetch if artifactId is in URL
+  useEffect(() => {
+    const artifactId = searchParams.get('artifactId');
+    if (artifactId) {
+      setModelId(artifactId);
+      fetchLineage(artifactId);
+    }
+  }, [searchParams]);
+
+  const handleFetch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    fetchLineage(modelId);
   };
 
   return (
@@ -58,33 +71,41 @@ const Lineage: React.FC = () => {
 
       {lineage && (
         <div className="bg-white rounded-lg shadow-md p-6">
-          <h2 className="text-xl font-bold mb-4">{lineage.name}</h2>
+          <h2 className="text-xl font-bold mb-4">Lineage Graph</h2>
           
-          {lineage.parents && lineage.parents.length > 0 && (
+          {lineage.nodes && lineage.nodes.length > 0 && (
             <div className="mb-4">
-              <h3 className="font-semibold text-gray-700 mb-2">Parent Models:</h3>
-              <ul className="list-disc list-inside">
-                {lineage.parents.map((parent, idx) => (
-                  <li key={idx} className="text-blue-600">{parent}</li>
+              <h3 className="font-semibold text-gray-700 mb-2">Nodes ({lineage.nodes.length}):</h3>
+              <ul className="list-disc list-inside space-y-1">
+                {lineage.nodes.map((node, idx) => (
+                  <li key={idx} className="text-blue-600">
+                    <span className="font-medium">{node.name || node.artifact_id}</span>
+                    <span className="text-gray-500 text-sm ml-2">({node.artifact_id})</span>
+                  </li>
                 ))}
               </ul>
             </div>
           )}
 
-          {lineage.children && lineage.children.length > 0 && (
+          {lineage.edges && lineage.edges.length > 0 && (
             <div>
-              <h3 className="font-semibold text-gray-700 mb-2">Child Models:</h3>
-              <ul className="list-disc list-inside">
-                {lineage.children.map((child, idx) => (
-                  <li key={idx} className="text-green-600">{child}</li>
+              <h3 className="font-semibold text-gray-700 mb-2">Relationships ({lineage.edges.length}):</h3>
+              <ul className="list-disc list-inside space-y-1">
+                {lineage.edges.map((edge, idx) => (
+                  <li key={idx} className="text-green-600">
+                    <span className="font-mono text-sm">{edge.from_node_artifact_id}</span>
+                    <span className="mx-2">→</span>
+                    <span className="font-mono text-sm">{edge.to_node_artifact_id}</span>
+                    <span className="text-gray-500 text-sm ml-2">({edge.relationship})</span>
+                  </li>
                 ))}
               </ul>
             </div>
           )}
 
-          <p className="text-sm text-gray-500 mt-4">
-            Note: D3 visualization will be added in the next iteration
-          </p>
+          {(!lineage.edges || lineage.edges.length === 0) && (
+            <p className="text-gray-500 mt-2">No lineage relationships found for this model.</p>
+          )}
         </div>
       )}
     </div>

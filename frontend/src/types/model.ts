@@ -38,8 +38,6 @@ export interface HealthStatus {
 }
 
 export interface LineageNode {
-  modelId: string;
-  name: string;
-  children?: string[];
-  parents?: string[];
+  nodes: Array<{ artifact_id: string; name: string; source?: string }>;
+  edges: Array<{ from_node_artifact_id: string; to_node_artifact_id: string; relationship: string }>;
 }
