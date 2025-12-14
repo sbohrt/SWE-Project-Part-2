@@ -6,8 +6,8 @@ SECURITY FIX: Added URL validation to prevent SSRF attacks.
 """
 from flask import Blueprint, request, jsonify
 
-from swe_project.api.validators import validate_model_url
-from cli import score_single_model
+from src.swe_project.api.validators import validate_model_url
+from src.cli import score_single_model
 
 bp = Blueprint("rate", __name__)
 

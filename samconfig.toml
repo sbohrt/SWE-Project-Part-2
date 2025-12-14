@@ -1,0 +1,13 @@
+# SAM configuration file
+version = 0.1
+
+[default.deploy]
+[default.deploy.parameters]
+stack_name = "swe-project-backend"
+s3_bucket = ""  # SAM will create this
+region = "us-east-2"
+confirm_changeset = false
+capabilities = "CAPABILITY_IAM"
+parameter_overrides = []
+image_repositories = []
+

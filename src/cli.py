@@ -25,19 +25,19 @@ from pathlib import Path
 from typing import List, Tuple
 
 # Ensure metric modules auto-register via package import side-effects.
-import metrics  # noqa: F401
-from core.exec_pool import run_parallel
-from core.model_url import is_hf_model_url, to_repo_id
-from core.scoring import combine
-from core.url_ctx import clear as clear_url_ctx
-from core.url_ctx import set_context
-from logger import setup_logging
-from metrics.base import registered
+import src.metrics  # noqa: F401
+from src.core.exec_pool import run_parallel
+from src.core.model_url import is_hf_model_url, to_repo_id
+from src.core.scoring import combine
+from src.core.url_ctx import clear as clear_url_ctx
+from src.core.url_ctx import set_context
+from src.logger import setup_logging
+from src.metrics.base import registered
 
 # ---------- IMPORTS ADDED FOR STEP 2 -------------
-from core.hf_client import model_config
-from swe_project.lineage_graph.lineage_extract import extract_parent_models
-from swe_project.lineage_graph.lineage_store import put_edges, Edge
+from src.core.hf_client import model_config
+from src.swe_project.lineage_graph.lineage_extract import extract_parent_models
+from src.swe_project.lineage_graph.lineage_store import put_edges, Edge
 # --------------------------------------------------
 
 
@@ -47,20 +47,19 @@ def _load_metrics() -> None:
     Called only by `cmd_score` so `install`/`test` don't require optional deps yet.
     """
     # Import inside function to avoid ImportError before `install` runs.
-    # Phase 1 metrics
-    from metrics import bus_factor  # noqa: F401
-    from metrics import code_quality  # noqa: F401
-    from metrics import dataset_and_code  # noqa: F401
-    from metrics import dataset_quality  # noqa: F401
-    from metrics import license  # noqa: F401
-    from metrics import performance_claims  # noqa: F401
-    from metrics import ramp_up_time  # noqa: F401
-    from metrics import size_score  # noqa: F401
+    from src.metrics import bus_factor  # noqa: F401
+    from src.metrics import code_quality  # noqa: F401
+    from src.metrics import dataset_and_code  # noqa: F401
+    from src.metrics import dataset_quality  # noqa: F401
+    from src.metrics import license  # noqa: F401
+    from src.metrics import performance_claims  # noqa: F401
+    from src.metrics import ramp_up_time  # noqa: F401
+    from src.metrics import size_score  # noqa: F401
 
     # Phase 2 metrics
-    from metrics import reproducibility  # noqa: F401
-    from metrics import reviewedness  # noqa: F401
-    from metrics import tree_score  # noqa: F401
+    from src.metrics import reproducibility  # noqa: F401
+    from src.metrics import reviewedness  # noqa: F401
+    from src.metrics import tree_score  # noqa: F401
 
 
 # ---------- helpers ----------

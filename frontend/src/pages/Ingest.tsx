@@ -3,6 +3,29 @@ import { useNavigate } from 'react-router-dom';
 import { modelService } from '../services/modelService';
 import ErrorMessage from '../components/ErrorMessage';
 
+// Validate URL matches supported sources
+const validateUrl = (url: string): { valid: boolean; error?: string } => {
+  const trimmed = url.trim();
+  
+  // HuggingFace Model: https://huggingface.co/[org]/[model] (not datasets)
+  const hfModelPattern = /^https:\/\/huggingface\.co\/(?!datasets\/)[\w.-]+\/[\w.-]+\/?$/i;
+  
+  // HuggingFace Dataset: https://huggingface.co/datasets/[org]/[dataset] or [dataset]
+  const hfDatasetPattern = /^https:\/\/huggingface\.co\/datasets\/[\w.-]+(\/[\w.-]+)?\/?$/i;
+  
+  // GitHub Repository: https://github.com/[user]/[repo]
+  const githubPattern = /^https:\/\/github\.com\/[\w.-]+\/[\w.-]+\/?$/i;
+  
+  if (hfModelPattern.test(trimmed)) return { valid: true };
+  if (hfDatasetPattern.test(trimmed)) return { valid: true };
+  if (githubPattern.test(trimmed)) return { valid: true };
+  
+  return {
+    valid: false,
+    error: 'Invalid URL. Please enter a valid HuggingFace model/dataset or GitHub repository URL.'
+  };
+};
+
 const Ingest: React.FC = () => {
   const [url, setUrl] = useState('');
   const [loading, setLoading] = useState(false);
@@ -15,6 +38,13 @@ const Ingest: React.FC = () => {
     
     if (!url.trim()) {
       setError('Please enter a valid URL');
+      return;
+    }
+
+    // Validate URL format
+    const validation = validateUrl(url);
+    if (!validation.valid) {
+      setError(validation.error || 'Invalid URL format');
       return;
     }
 

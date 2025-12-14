@@ -46,7 +46,10 @@ Resources:
           # TODO: Replace with secure value from AWS Secrets Manager or Parameter Store
           ADMIN_API_KEY: "CHANGE-ME-IN-PRODUCTION"
           # SECURITY FIX: Restrict CORS to specific origins
-          ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5000"
+          # Include local dev and deployed S3 frontend
+          ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5000,http://blas-swe-project-frontend.s3-website.us-east-2.amazonaws.com"
+          # Force redeploy timestamp
+          DEPLOY_VERSION: "2024-12-10-v5"
 
       Policies:
         # SECURITY FIX: Replaced overly-permissive managed policies with least-privilege inline policies
@@ -102,7 +105,6 @@ Resources:
   RatingTable:
     Type: AWS::DynamoDB::Table
     Properties:
-      TableName: swe-project-model-ratings
       AttributeDefinitions:
         - AttributeName: modelId
           AttributeType: S 
@@ -118,8 +120,8 @@ Resources:
   RepositoryBucket:
     Type: AWS::S3::Bucket
     Properties:
-      # Ensures a globally unique bucket name by appending the AWS Account ID
-      BucketName: swe-project-repository-${AWS::AccountId}
+      # Use CloudFormation substitution for a globally unique bucket name
+      BucketName: !Sub "swe-project-repository-${AWS::AccountId}-api"
 
   # Explicit API Gateway definition (allows global configuration)
   ApiGateway:
@@ -130,11 +132,9 @@ Resources:
       # Note: For production, replace with actual frontend domain
       Cors:
         AllowMethods: "'GET,POST,PUT,DELETE,OPTIONS'"
-        AllowHeaders: "'Content-Type,X-API-Key,Authorization'"
-        # Restrict to localhost for development
-        # TODO: Update with production frontend URL
-        AllowOrigin: "'http://localhost:3000'"
-        AllowCredentials: true
+        AllowHeaders: "'Content-Type,X-Authorization,Authorization,X-API-Key'"
+        AllowOrigin: "'*'"
+        AllowCredentials: false
         
 # -----------------
 # OUTPUTS

@@ -1,51 +1,84 @@
-import { api } from './api';
+import { api, rootApi } from './api';
 import { ModelScore, HealthStatus, LineageNode } from '../types/model';
 
 export const modelService = {
-  // CRUD Operations
+  // Get all models - uses POST /artifacts at ROOT (not /api/v1)
   getAllModels: async (): Promise<ModelScore[]> => {
-    const response = await api.get('/models');
-    return response.data;
+    // First get list of model artifacts (artifacts_bp is at root)
+    const listResponse = await rootApi.post('/artifacts', [{ name: '*', types: ['model'] }]);
+    const artifacts = listResponse.data; // Array of {name, id, type}
+    
+    // Then fetch ratings for each model (also at root)
+    const modelsWithRatings = await Promise.all(
+      artifacts.map(async (artifact: { name: string; id: string; type: string }) => {
+        try {
+          const ratingResponse = await rootApi.get(`/artifact/model/${artifact.id}/rate`);
+          return {
+            modelId: artifact.id,
+            name: artifact.name || ratingResponse.data.name,
+            ...ratingResponse.data,
+          };
+        } catch {
+          // If rating fails, return basic info
+          return {
+            modelId: artifact.id,
+            name: artifact.name,
+            category: 'MODEL',
+            net_score: null,
+            license: null,
+            bus_factor: null,
+            code_quality: null,
+            ramp_up_time: null,
+          };
+        }
+      })
+    );
+    
+    return modelsWithRatings;
   },
 
   getModelById: async (id: string): Promise<ModelScore> => {
-    const response = await api.get(`/models/${id}`);
+    const response = await rootApi.get(`/artifact/model/${id}`);
     return response.data;
   },
 
   createModel: async (modelData: Partial<ModelScore>): Promise<ModelScore> => {
-    const response = await api.post('/models', modelData);
+    const response = await rootApi.post('/artifact/model', modelData);
     return response.data;
   },
 
   updateModel: async (id: string, modelData: Partial<ModelScore>): Promise<ModelScore> => {
-    const response = await api.put(`/models/${id}`, modelData);
+    const response = await rootApi.put(`/artifact/model/${id}`, modelData);
     return response.data;
   },
 
   deleteModel: async (id: string): Promise<void> => {
-    await api.delete(`/models/${id}`);
+    // Backend expects DELETE /artifact/model/{id} at root
+    await rootApi.delete(`/artifact/model/${id}`);
   },
 
-  // Rate Model
+  // Rate Model - get rating for a model
   rateModel: async (url: string): Promise<ModelScore> => {
-    const response = await api.post('/rate', { url });
-    return response.data;
+    // First ingest (at root), then get rating
+    const ingestResponse = await rootApi.post('/ingest', { url });
+    const modelId = ingestResponse.data.id;
+    const ratingResponse = await rootApi.get(`/artifact/model/${modelId}/rate`);
+    return ratingResponse.data;
   },
 
-  // Health Check
+  // Health Check (at root)
   getHealth: async (): Promise<HealthStatus> => {
-    const response = await api.get('/health');
+    const response = await rootApi.get('/health');
     return response.data;
   },
 
-  // Ingest Model (placeholder - adjust based on your actual endpoint)
-  ingestModel: async (url: string): Promise<ModelScore> => {
-    const response = await api.post('/ingest', { url });
+  // Ingest Model (at root)
+  ingestModel: async (url: string): Promise<any> => {
+    const response = await rootApi.post('/ingest', { url });
     return response.data;
   },
 
-  // Enumerate artifacts with filters
+  // Enumerate with filters
   enumerateModels: async (filters?: {
     name?: string;
     types?: string[];
@@ -67,14 +100,14 @@ export const modelService = {
     };
   },
 
-  // Lineage Graph (placeholder - adjust based on your actual endpoint)
+  // Lineage Graph (at root)
   getLineage: async (modelId: string): Promise<LineageNode> => {
-    const response = await api.get(`/lineage/${modelId}`);
+    const response = await rootApi.get(`/artifact/model/${modelId}/lineage`);
     return response.data;
   },
 
-  // Reset Registry (admin only)
+  // Reset Registry (at root)
   resetRegistry: async (): Promise<void> => {
-    await api.post('/reset');
+    await rootApi.delete('/reset');
   },
 };

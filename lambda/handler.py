@@ -1,13 +1,11 @@
 # lambda/handler.py
+import awsgi
 from src.swe_project.api.app import create_app
-from mangum import Mangum
-from asgiref.wsgi import WsgiToAsgi
 
 # Build the Flask (WSGI) app
 flask_app = create_app()
 
-# Convert WSGI -> ASGI
-asgi_app = WsgiToAsgi(flask_app)
 
-# Mangum wraps the ASGI app for Lambda / API Gateway
-handler = Mangum(asgi_app)
+def handler(event, context):
+    """AWS Lambda handler using awsgi for Flask."""
+    return awsgi.response(flask_app, event, context)

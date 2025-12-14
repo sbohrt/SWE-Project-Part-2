@@ -1,0 +1,15 @@
+# Exclude non-backend content to keep the Lambda artifact small
+frontend/**
+node_modules/**
+.git/**
+.aws-sam/**
+.venv/**
+.pytest_cache/**
+__pycache__/**
+*.pyc
+*.pyo
+*.log
+build/**
+dist/**
+.cursor/**
+
