@@ -4,7 +4,7 @@ import boto3
 from decimal import Decimal
 from flask import Blueprint, request, jsonify
 
-from cli import score_single_model
+from src.cli import score_single_model
 
 bp = Blueprint('ingest', __name__)
 

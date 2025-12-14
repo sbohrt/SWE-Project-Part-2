@@ -2,9 +2,9 @@ import os
 import re
 import time
 
-from core.hf_client import download_snapshot
-from llm_client import ask_llm
-from metrics.base import register
+from src.core.hf_client import download_snapshot
+from src.llm_client import ask_llm
+from src.metrics.base import register
 
 
 def compute(model_url: str):

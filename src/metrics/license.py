@@ -3,8 +3,8 @@ import re
 import time
 from typing import Optional, Tuple
 
-from core.hf_client import download_snapshot, model_info
-from metrics.base import register
+from src.core.hf_client import download_snapshot, model_info
+from src.metrics.base import register
 
 # Simple regex to catch license mentions in README (ai generated)
 LICENSE_PATTERN = re.compile(

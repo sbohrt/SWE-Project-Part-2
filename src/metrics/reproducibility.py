@@ -14,8 +14,8 @@ import re
 import time
 from typing import Optional
 
-from core.hf_client import download_snapshot, model_info
-from metrics.base import register
+from src.core.hf_client import download_snapshot, model_info
+from src.metrics.base import register
 
 
 def _check_code_in_readme(readme_content: str) -> bool:

@@ -13,8 +13,8 @@ from typing import Optional, Tuple
 
 import requests
 
-from core.hf_client import download_snapshot, model_info
-from metrics.base import register
+from src.core.hf_client import download_snapshot, model_info
+from src.metrics.base import register
 
 
 def _extract_github_url(model_url: str, readme_content: Optional[str] = None) -> Optional[str]:

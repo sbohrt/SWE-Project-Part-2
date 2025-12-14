@@ -3,9 +3,9 @@ from __future__ import annotations
 import time
 from typing import Dict, Iterable, Optional, cast
 
-from core.hf_client import model_info
-from core.model_url import to_repo_id
-from metrics.base import MetricResult, register
+from src.core.hf_client import model_info
+from src.core.model_url import to_repo_id
+from src.metrics.base import MetricResult, register
 
 # Weight-file extensions we count toward model size
 _WEIGHT_EXTS: Iterable[str] = (".safetensors", ".bin", ".onnx", ".tflite", ".h5", ".pt")

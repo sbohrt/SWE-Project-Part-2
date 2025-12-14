@@ -13,12 +13,12 @@ from typing import Any, Dict, Optional, Set, Tuple
 # third-party
 import requests
 from huggingface_hub import ModelCard
-from core.hf_client import model_info
-from core.model_url import to_repo_id
-from core.url_ctx import get_code_url
+from src.core.hf_client import model_info
+from src.core.model_url import to_repo_id
+from src.core.url_ctx import get_code_url
 
 # local
-from metrics.base import MetricResult, register
+from src.metrics.base import MetricResult, register
 
 NAME = "bus_factor"
 FIELD = "bus_factor"

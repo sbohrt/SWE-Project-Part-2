@@ -4,8 +4,8 @@ import logging
 import time
 from typing import Any
 
-from core.hf_client import dataset_info
-from metrics.base import MetricResult, register
+from src.core.hf_client import dataset_info
+from src.metrics.base import MetricResult, register
 
 NAME, FIELD = "dataset_quality", "dataset_quality"
 

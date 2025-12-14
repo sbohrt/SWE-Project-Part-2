@@ -11,8 +11,8 @@ import os
 import time
 from typing import List, Dict, Optional
 
-from core.hf_client import download_snapshot, model_info
-from metrics.base import register
+from src.core.hf_client import download_snapshot, model_info
+from src.metrics.base import register
 
 
 def _extract_parent_models(config_data: dict) -> List[str]:
