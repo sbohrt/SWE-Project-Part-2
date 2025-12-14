@@ -3,11 +3,15 @@ version = 0.1
 
 [default.deploy]
 [default.deploy.parameters]
-stack_name = "swe-project-backend"
+stack_name = "luis-swe-project"
 s3_bucket = ""  # SAM will create this
-region = "us-east-2"
-confirm_changeset = false
+confirm_changeset = true
 capabilities = "CAPABILITY_IAM"
 parameter_overrides = []
 image_repositories = []
+resolve_s3 = true
+s3_prefix = "luis-swe-project"
 
+
+[default.global.parameters]
+region = "us-east-2"

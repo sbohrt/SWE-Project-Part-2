@@ -1,15 +1,60 @@
-# Exclude non-backend content to keep the Lambda artifact small
-frontend/**
-node_modules/**
-.git/**
-.aws-sam/**
-.venv/**
-.pytest_cache/**
-__pycache__/**
+# Exclude frontend completely
+frontend/
+
+# Exclude Node.js
+node_modules/
+
+# Exclude version control
+.git/
+.github/
+
+# Exclude SAM build artifacts
+.aws-sam/
+
+# Exclude Python virtual environments
+.venv/
+venv/
+env/
+
+# Exclude Python cache and test files
+__pycache__/
+.pytest_cache/
 *.pyc
 *.pyo
-*.log
-build/**
-dist/**
-.cursor/**
+*.pyd
+.coverage
+htmlcov/
+coverage.xml
 
+# Exclude test files
+tests/
+test_*.py
+
+# Exclude documentation
+*.md
+docs/
+reports/
+
+# Exclude IDE files
+.vscode/
+.idea/
+.cursor/
+*.swp
+.DS_Store
+
+# Exclude large model files
+*.bin
+*.safetensors
+*.pt
+*.pth
+*.onnx
+
+# Exclude logs and temporary files
+*.log
+*.tmp
+build/
+dist/
+
+# Exclude downloaded/cached data
+.cache/
+downloads/
