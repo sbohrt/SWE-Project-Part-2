@@ -2,7 +2,7 @@
 import json
 from pathlib import Path
 
-from swe_project.cli import main
+from cli import main
 
 
 def test_cli_score_smoke(capsys, tmp_path: Path) -> None:

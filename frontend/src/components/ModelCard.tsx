@@ -44,6 +44,20 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onView, onDelete }) => {
           <span className="text-gray-600">Ramp-Up:</span>
           <span className="ml-2 font-medium">{(model.ramp_up_time * 100).toFixed(0)}%</span>
         </div>
+        <div>
+          <span className="text-gray-600">Reproducibility:</span>
+          <span className="ml-2 font-medium">{(model.reproducibility * 100).toFixed(0)}%</span>
+        </div>
+        <div>
+          <span className="text-gray-600">Reviewedness:</span>
+          <span className="ml-2 font-medium">
+            {model.reviewedness < 0 ? 'N/A' : `${(model.reviewedness * 100).toFixed(0)}%`}
+          </span>
+        </div>
+        <div>
+          <span className="text-gray-600">Tree Score:</span>
+          <span className="ml-2 font-medium">{(model.tree_score * 100).toFixed(0)}%</span>
+        </div>
       </div>
 
       <div className="flex space-x-2">

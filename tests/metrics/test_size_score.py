@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from types import SimpleNamespace
 
-from swe_project.metrics import size_score as ss
+from metrics import size_score as ss
 
 # ---------- helpers: pure behavior ----------
 

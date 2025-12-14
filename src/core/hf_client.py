@@ -39,7 +39,8 @@ def dataset_info(repo_id: str, revision: Optional[str] = None) -> Any:
 # this is to silence the progress bars from huggingface_hub snapshot_download
 class SilentTqdm(tqdm):
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs, disable=True)
+        kwargs['disable'] = True
+        super().__init__(*args, **kwargs)
 
 
 # what we did was to create a subclass of tqdm that is always disabled, and pass it to snapshot_download

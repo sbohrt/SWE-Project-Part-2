@@ -5,9 +5,9 @@ from types import SimpleNamespace
 from unittest.mock import patch
 
 import pytest
-from swe_project.core.url_ctx import clear as clear_url_ctx
-from swe_project.core.url_ctx import set_context
-from swe_project.metrics import bus_factor as bf
+from core.url_ctx import clear as clear_url_ctx
+from core.url_ctx import set_context
+from metrics import bus_factor as bf
 
 # -------- helpers to build fake commit streams --------
 
@@ -52,7 +52,7 @@ def test_uses_code_url_from_context(monkeypatch) -> None:
     monkeypatch.setattr(bf, "_parse_gh", lambda u: ("foo", "bar"))
     monkeypatch.setattr(bf, "_get_default_branch", lambda *_: "main")
     # minimal repo metadata: not archived, some lifetime signal
-    with patch("swe_project.metrics.bus_factor.requests.get") as mock_get:
+    with patch("metrics.bus_factor.requests.get") as mock_get:
         mock_get.return_value.status_code = 200
         mock_get.return_value.json.return_value = {
             "archived": False,
@@ -79,7 +79,7 @@ def test_fallback_via_card_metadata(mock_branch, monkeypatch) -> None:
 
     # HF model_info returns a direct GitHub repo link
     with patch.object(bf, "model_info") as mock_model_info, patch(
-        "swe_project.metrics.bus_factor.requests.get"
+        "metrics.bus_factor.requests.get"
     ) as mock_get:
         mock_model_info.return_value = SimpleNamespace(
             cardData={"code_repository": "https://github.com/org/repo"},
@@ -113,7 +113,7 @@ def test_fallback_via_card_markdown(mock_branch, monkeypatch) -> None:
 
     with patch.object(bf, "model_info") as mock_model_info, patch.object(
         bf.ModelCard, "load"
-    ) as mock_load, patch("swe_project.metrics.bus_factor.requests.get") as mock_get:
+    ) as mock_load, patch("metrics.bus_factor.requests.get") as mock_get:
         mock_model_info.return_value = SimpleNamespace(cardData={}, tags=[])
         mock_load.return_value = SimpleNamespace(
             content="some text links https://github.com/acme/coolrepo and more"
