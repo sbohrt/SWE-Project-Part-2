@@ -25,6 +25,12 @@ export interface ModelScore {
   dataset_quality_latency: number;
   code_quality: number;
   code_quality_latency: number;
+  reproducibility: number;
+  reproducibility_latency: number;
+  reviewedness: number;
+  reviewedness_latency: number;
+  tree_score: number;
+  tree_score_latency: number;
 }
 
 export interface HealthStatus {

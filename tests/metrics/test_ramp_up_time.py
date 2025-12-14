@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from swe_project.metrics import (
+from metrics import (
     ramp_up_time as rt,  # import the module so we can monkeypatch its *local* imports
 )
 

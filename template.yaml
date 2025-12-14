@@ -19,7 +19,7 @@ Globals:
   Function:
     Timeout: 15 # Set a reasonable timeout (15 seconds)
     MemorySize: 512 # Adequate memory for Python apps with dependencies
-    Runtime: python3.10
+    Runtime: python3.13
     
 # -----------------
 # RESOURCES
@@ -31,10 +31,10 @@ Resources:
       # Handler path: {directory.file_name.handler_object}
       # This points to the 'handler' object in 'lambda/handler.py'
       Handler: lambda.handler.handler
-      
+
       # CodeUri points to the directory to be packaged and uploaded.
-      # '.' packages the entire SWE-Project-Part-2 folder (including src/ and lambda/).
-      CodeUri: . 
+      # Using lambda_deploy staging directory to exclude frontend and other large files
+      CodeUri: lambda_deploy 
       
       # Define environment variables for the Lambda function
       Environment:
@@ -47,7 +47,7 @@ Resources:
           ADMIN_API_KEY: "CHANGE-ME-IN-PRODUCTION"
           # SECURITY FIX: Restrict CORS to specific origins
           # Include local dev and deployed S3 frontend
-          ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5000,http://blas-swe-project-frontend.s3-website.us-east-2.amazonaws.com"
+          ALLOWED_ORIGINS: "http://localhost:3000,http://localhost:5000,http://luis-swe-project-frontend.s3-website.us-east-2.amazonaws.com"
           # Force redeploy timestamp
           DEPLOY_VERSION: "2024-12-10-v5"
 

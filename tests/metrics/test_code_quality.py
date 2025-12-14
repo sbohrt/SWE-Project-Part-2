@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 
-from swe_project.metrics import code_quality as cq
+from metrics import code_quality as cq
 
 
 def _mock_model_info(filenames: list[str] | None = None) -> SimpleNamespace:

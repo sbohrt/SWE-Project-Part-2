@@ -80,13 +80,24 @@ export const modelService = {
 
   // Enumerate with filters
   enumerateModels: async (filters?: {
-    regex?: string;
-    version?: string;
-    page?: number;
-    limit?: number;
-  }): Promise<{ models: ModelScore[]; total: number }> => {
-    const response = await api.get('/enumerate', { params: filters });
-    return response.data;
+    name?: string;
+    types?: string[];
+    offset?: number;
+  }): Promise<{ models: ModelScore[]; offset: string }> => {
+    // Build artifact query according to OpenAPI spec
+    const query = [{
+      name: filters?.name || '*',  // Default to wildcard for all
+      ...(filters?.types && { types: filters.types })  // Optional type filter
+    }];
+
+    const params = filters?.offset ? { offset: filters.offset.toString() } : {};
+
+    const response = await api.post('/artifacts', query, { params });
+
+    return {
+      models: response.data,
+      offset: response.headers['offset'] || '0'
+    };
   },
 
   // Lineage Graph (at root)

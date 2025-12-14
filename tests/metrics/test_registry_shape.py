@@ -1,5 +1,5 @@
 """
-Ensure every metric module under swe_project.metrics self-registers.
+Ensure every metric module under metrics self-registers.
 """
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import importlib
 import pkgutil
 from typing import Set
 
-import swe_project.metrics as metrics_pkg
-from swe_project.metrics.base import clear_registry_for_tests, registered
+import metrics as metrics_pkg
+from metrics.base import clear_registry_for_tests, registered
 
 
 def _discover_metric_modules() -> Set[str]:

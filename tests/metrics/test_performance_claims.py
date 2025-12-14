@@ -4,7 +4,7 @@ from types import SimpleNamespace
 
 import pytest
 
-from swe_project.metrics import performance_claims as pc
+from metrics import performance_claims as pc
 
 
 def _fake_info(card_data=None, tags=None):

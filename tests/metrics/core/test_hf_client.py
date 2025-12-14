@@ -1,4 +1,4 @@
-from swe_project.core import hf_client as hc
+from core import hf_client as hc
 
 
 def test_model_info_calls_hfapi(monkeypatch):

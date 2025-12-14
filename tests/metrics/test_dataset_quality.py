@@ -3,7 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from swe_project.metrics import dataset_quality as dq
+from metrics import dataset_quality as dq
 
 
 def _mock_dataset_info(
