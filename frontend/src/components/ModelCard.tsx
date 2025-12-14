@@ -28,6 +28,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onView, onDelete }) => {
       </div>
 
       <div className="grid grid-cols-2 gap-2 text-sm mb-3">
+        {/* Phase 1 Metrics */}
         <div>
           <span className="text-gray-600">License:</span>
           <span className="ml-2 font-medium">{(model.license * 100).toFixed(0)}%</span>
@@ -41,8 +42,36 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onView, onDelete }) => {
           <span className="ml-2 font-medium">{(model.code_quality * 100).toFixed(0)}%</span>
         </div>
         <div>
-          <span className="text-gray-600">Ramp-Up:</span>
+          <span className="text-gray-600">Ramp-Up Time:</span>
           <span className="ml-2 font-medium">{(model.ramp_up_time * 100).toFixed(0)}%</span>
+        </div>
+        <div>
+          <span className="text-gray-600">Performance Claims:</span>
+          <span className="ml-2 font-medium">{(model.performance_claims * 100).toFixed(0)}%</span>
+        </div>
+        <div>
+          <span className="text-gray-600">Dataset Quality:</span>
+          <span className="ml-2 font-medium">{(model.dataset_quality * 100).toFixed(0)}%</span>
+        </div>
+        <div>
+          <span className="text-gray-600">Dataset & Code:</span>
+          <span className="ml-2 font-medium">{(model.dataset_and_code_score * 100).toFixed(0)}%</span>
+        </div>
+        <div>
+          <span className="text-gray-600">Size (Avg):</span>
+          <span className="ml-2 font-medium">
+            {(
+              (model.size_score.raspberry_pi +
+               model.size_score.jetson_nano +
+               model.size_score.desktop_pc +
+               model.size_score.aws_server) / 4 * 100
+            ).toFixed(0)}%
+          </span>
+        </div>
+
+        {/* Phase 2 Metrics */}
+        <div className="col-span-2 mt-2 pt-2 border-t border-gray-200">
+          <span className="text-gray-500 text-xs font-semibold">Phase 2 Metrics</span>
         </div>
         <div>
           <span className="text-gray-600">Reproducibility:</span>
