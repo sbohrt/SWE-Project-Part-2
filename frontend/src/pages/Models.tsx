@@ -12,6 +12,10 @@ const Models: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    document.title = 'Models - Model Registry';
+  }, []);
+
   const fetchModels = async () => {
     try {
       setLoading(true);
@@ -53,7 +57,7 @@ const Models: React.FC = () => {
         <h1 className="text-3xl font-bold text-gray-800">Registered Models</h1>
         <button
           onClick={() => navigate('/ingest')}
-          className="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded"
+          className="bg-green-700 hover:bg-green-800 text-white font-bold py-2 px-4 rounded"
         >
           Ingest New Model
         </button>

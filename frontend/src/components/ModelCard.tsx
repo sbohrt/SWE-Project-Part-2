@@ -115,7 +115,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onView, onDelete }) => {
         {onView && (
           <button
             onClick={() => onView(model.modelId)}
-            className="flex-1 bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+            className="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
             aria-label={`View lineage for ${model.name}`}
           >
             View Lineage
@@ -124,7 +124,7 @@ const ModelCard: React.FC<ModelCardProps> = ({ model, onView, onDelete }) => {
         {onDelete && (
           <button
             onClick={() => onDelete(model.modelId)}
-            className="bg-red-500 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
+            className="bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded"
             aria-label={`Delete ${model.name}`}
           >
             Delete

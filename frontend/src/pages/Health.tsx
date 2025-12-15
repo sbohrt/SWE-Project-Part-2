@@ -9,6 +9,10 @@ const Health: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    document.title = 'System Health - Model Registry';
+  }, []);
+
   const fetchHealth = async () => {
     try {
       setLoading(true);
@@ -37,7 +41,7 @@ const Health: React.FC = () => {
         <h1 className="text-3xl font-bold text-gray-800">System Health</h1>
         <button
           onClick={fetchHealth}
-          className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
+          className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded"
           aria-label="Refresh health status"
         >
           Refresh

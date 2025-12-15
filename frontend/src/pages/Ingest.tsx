@@ -33,6 +33,10 @@ const Ingest: React.FC = () => {
   const [success, setSuccess] = useState(false);
   const navigate = useNavigate();
 
+  React.useEffect(() => {
+    document.title = 'Ingest Model - Model Registry';
+  }, []);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -94,9 +98,14 @@ const Ingest: React.FC = () => {
           </div>
 
           {error && <ErrorMessage message={error} />}
-          
+
           {success && (
-            <div className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4" role="alert">
+            <div
+              className="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded mb-4"
+              role="alert"
+              aria-live="polite"
+              aria-atomic="true"
+            >
               Model successfully ingested! Redirecting to models list...
             </div>
           )}
@@ -105,7 +114,7 @@ const Ingest: React.FC = () => {
             <button
               type="submit"
               disabled={loading}
-              className={`bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${
+              className={`bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded focus:outline-none focus:shadow-outline ${
                 loading ? 'opacity-50 cursor-not-allowed' : ''
               }`}
             >
