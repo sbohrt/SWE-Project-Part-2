@@ -11,6 +11,10 @@ const Lineage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  React.useEffect(() => {
+    document.title = 'Model Lineage - Model Registry';
+  }, []);
+
   const fetchLineage = async (id: string) => {
     if (!id.trim()) {
       setError('Please enter a model ID');
@@ -60,7 +64,7 @@ const Lineage: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="bg-blue-500 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded"
+            className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-6 rounded"
           >
             {loading ? 'Loading...' : 'View Lineage'}
           </button>

@@ -11,8 +11,17 @@ function App() {
   return (
     <Router>
       <div className="min-h-screen bg-gray-100">
+        {/* Skip navigation link for keyboard users */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:absolute focus:top-0 focus:left-0 focus:z-50 focus:bg-blue-600 focus:text-white focus:p-4 focus:m-2"
+        >
+          Skip to main content
+        </a>
+
         <Navigation />
-        <main>
+
+        <main id="main-content" role="main">
           <Routes>
             <Route path="/" element={<Home />} />
             <Route path="/models" element={<Models />} />
